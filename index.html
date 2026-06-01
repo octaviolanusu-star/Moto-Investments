@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Moto Inversiones</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --purple: #534AB7;
+    --green: #3B6D11;
+    --green-bg: #EAF3DE;
+    --green-text: #27500A;
+    --blue-bg: #E6F1FB;
+    --blue-text: #0C447C;
+    --amber: #854F0B;
+    --amber-bg: #FAEEDA;
+    --red: #A32D2D;
+    --border: #e5e7eb;
+    --bg: #f9fafb;
+    --card: #ffffff;
+    --text: #111827;
+    --muted: #6b7280;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .app { max-width: 480px; margin: 0 auto; padding: 0 0 80px; }
+
+  /* Header */
+  .header { background: #fff; border-bottom: 1px solid var(--border); padding: 14px 16px; position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; }
+  .header-left h1 { font-size: 17px; font-weight: 600; color: var(--text); }
+  .header-left p { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .save-pill { display: flex; align-items: center; gap: 5px; font-size: 11px; padding: 4px 10px; border-radius: 20px; background: var(--green-bg); color: var(--green-text); font-weight: 500; }
+  .save-pill.saving { background: var(--amber-bg); color: var(--amber); }
+  .save-pill.error { background: #FCEBEB; color: #791F1F; }
+
+  /* KPIs */
+  .kpi-section { padding: 14px 16px; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+  .kpi-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .kpi-value { font-size: 22px; font-weight: 600; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .kpi-value.up { color: var(--green); }
+
+  /* Nav tabs */
+  .nav { display: flex; overflow-x: auto; background: #fff; border-bottom: 1px solid var(--border); scrollbar-width: none; position: sticky; top: 57px; z-index: 40; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-btn { flex-shrink: 0; padding: 11px 16px; font-size: 13px; font-weight: 500; border: none; background: transparent; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+  .nav-btn.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+  /* Content */
+  .content { padding: 16px; }
+  .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+  .card-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .card-row:first-child { border-top: none; }
+  .row-label { color: var(--muted); }
+  .row-val { font-weight: 600; color: var(--text); }
+  .row-gain { font-weight: 600; color: var(--green); }
+  .row-neg { font-weight: 600; color: var(--red); }
+
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .b-sold { background: var(--green-bg); color: var(--green-text); }
+  .b-active { background: var(--blue-bg); color: var(--blue-text); }
+
+  /* Moto card header */
+  .moto-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+  .moto-name { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .moto-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* Time strip */
+  .time-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--bg); border-radius: var(--radius-sm); padding: 10px; margin: 10px 0; }
+  .tc { text-align: center; }
+  .tv { font-size: 13px; font-weight: 600; color: var(--text); }
+  .tv.up { color: var(--green); }
+  .tl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* Socio row */
+  .inv-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .inv-row:first-child { border-top: none; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  .bar-wrap { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar-fill { height: 100%; border-radius: 2px; }
+
+  /* Buttons */
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; border: none; width: 100%; }
+  .btn-primary { background: var(--text); color: #fff; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+  .btn-outline:hover { background: var(--bg); }
+  .btn-green { background: transparent; border: 1px solid #3B6D11; color: #3B6D11; }
+  .btn-green:hover { background: var(--green-bg); }
+  .btn-amber { background: transparent; border: 1px dashed var(--amber); color: var(--amber); }
+  .btn-amber:hover { background: var(--amber-bg); }
+  .btn-dashed { background: transparent; border: 1px dashed var(--border); color: var(--muted); }
+  .btn-dashed:hover { background: var(--bg); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+  .btn-sm:hover { background: var(--bg); }
+  .btn-danger-sm { border-color: #fca5a5; color: var(--red); }
+  .btn-danger-sm:hover { background: #FCEBEB; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+
+  /* Extra costs */
+  .extra-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .extra-item:first-child { border-top: none; }
+
+  /* Timeline */
+  .tl-item { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+  .tl-item:first-child { border-top: none; }
+  .tl-dc { display: flex; flex-direction: column; align-items: center; padding-top: 3px; }
+  .tl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .tl-line { flex: 1; width: 1px; background: var(--border); margin-top: 3px; }
+
+  /* Chart */
+  .chart-wrap { position: relative; width: 100%; height: 200px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  /* Projection */
+  .proj-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--border); font-size: 13px; }
+  .proj-row:first-child { border-top: none; }
+  .range-wrap { display: flex; align-items: center; gap: 10px; }
+  .range-wrap input[type=range] { flex: 1; accent-color: var(--purple); }
+  .range-val { font-size: 14px; font-weight: 600; min-width: 38px; text-align: right; color: var(--purple); }
+
+  /* Sim results */
+  .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .sim-r { background: var(--bg); border-radius: var(--radius-sm); padding: 12px; text-align: center; border: 1px solid var(--border); }
+  .sim-rv { font-size: 20px; font-weight: 700; }
+  .sim-rl { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* Modal overlay */
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 100; align-items: flex-end; justify-content: center; }
+  .overlay.open { display: flex; }
+  .sheet { background: #fff; border-radius: 20px 20px 0 0; padding: 20px 20px 36px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+  .sheet-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 16px; }
+  .sheet h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+  .fg { margin-bottom: 14px; }
+  .fg label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  .fg input, .fg select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; background: #fff; color: var(--text); }
+  .fg input:focus, .fg select:focus { outline: none; border-color: var(--purple); }
+  .sheet-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .sheet-actions .btn { flex: 1; }
+  .contrib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .contrib-name { width: 70px; font-size: 13px; color: var(--muted); }
+  .contrib-row input { flex: 1; }
+
+  /* Password gate */
+  .gate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .gate-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 24px; width: 100%; max-width: 360px; text-align: center; }
+  .gate-card h2 { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
+  .gate-card p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .gate-card input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 15px; text-align: center; letter-spacing: 4px; margin-bottom: 12px; }
+  .gate-error { font-size: 13px; color: var(--red); margin-top: 8px; min-height: 20px; }
+
+  /* Spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--purple); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
+</style>
+</head>
+<body>
+
+<!-- PASSWORD GATE -->
+<div class="gate" id="gateScreen">
+  <div class="gate-card">
+    <div style="font-size:40px;margin-bottom:12px">🏍️</div>
+    <h2>Moto Inversiones</h2>
+    <p>Octavio · Nacho · Anita</p>
+    <input type="password" id="pinInput" placeholder="••••" maxlength="20" onkeydown="if(event.key==='Enter')checkPin()">
+    <button class="btn btn-primary" onclick="checkPin()">Entrar</button>
+    <div class="gate-error" id="pinError"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="mainApp" style="display:none">
+
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>🏍️ Moto Inversiones</h1>
+      <p>Octavio · Nacho · Anita</p>
+    </div>
+    <div class="save-pill" id="savePill">✓ Guardado</div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-section">
+    <div class="kpi-grid" id="kpiGrid"></div>
+  </div>
+
+  <!-- Nav -->
+  <div class="nav">
+    <button class="nav-btn active" data-tab="resumen" onclick="sw('resumen')">Resumen</button>
+    <button class="nav-btn" data-tab="motos" onclick="sw('motos')">Motos</button>
+    <button class="nav-btn" data-tab="socios" onclick="sw('socios')">Socios</button>
+    <button class="nav-btn" data-tab="historial" onclick="sw('historial')">Historial</button>
+    <button class="nav-btn" data-tab="proyeccion" onclick="sw('proyeccion')">Proyección</button>
+    <button class="nav-btn" data-tab="simulador" onclick="sw('simulador')">Simulador</button>
+  </div>
+
+  <!-- Tab content -->
+  <div class="content" id="tabContent"></div>
+</div>
+
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="overlayAddMoto">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3>➕ Agregar moto</h3>
+    <div class="fg"><label>Nombre</label><input type="text" id="mNom" placeholder="Ej: 2023 Honda CBR 600RR"></div>
+    <div class="fg"><label>Fecha de compra</label><input type="date" id="mFecha"></div>
+    <div class="fg"><label>Costo (USD)</label><input type="number" id="mCosto" placeholder="0" min="0"></div>
+    <div class="fg"><label>Aportes extra por socio (si alguno pone más)</label><div id="mExtras"></div></div>
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('overlayAddMoto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="doAddMoto()">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayEditMoto">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3>✏️ Editar moto</h3>
+    <div class="fg"><label>Nombre</label><input type="text" id="eNom"></div>
+    <div class="fg"><label>Fecha de compra</label><input type="date" id="eFecha"></div>
+    <div class="fg"><label>Costo de compra (USD)</label><input type="number" id="eCosto" min="0"></div>
+    <div class="fg"><label>Aportes extra por socio</label><div id="eExtras"></div></div>
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('overlayEditMoto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="doEditMoto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlaySell">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3>💰 Registrar venta</h3>
+    <div class="fg"><label>Fecha de venta</label><input type="date" id="sFecha"></div>
+    <div class="fg"><label>Precio de venta (USD)</label><input type="number" id="sPrecio" placeholder="0" min="0"></div>
+    <div class="fg"><label>% comisión concesionario</label><input type="number" id="sComm" value="10" min="0" max="100"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('overlaySell')">Cancelar</button>
+      <button class="btn btn-primary" onclick="doSell()">Confirmar venta</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlayAddCost">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3>🔧 Agregar costo</h3>
+    <div class="fg"><label>Descripción</label><input type="text" id="cDesc" placeholder="Ej: Service, cadena, frenos..."></div>
+    <div class="fg"><label>Monto (USD)</label><input type="number" id="cAmt" placeholder="0" min="0"></div>
+    <div class="fg"><label>Fecha</label><input type="date" id="cDate"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-outline" onclick="closeOverlay('overlayAddCost')">Cancelar</button>
+      <button class="btn btn-primary" onclick="doAddCost()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const PIN = '1234'; // Cambiar esta contraseña
+const STORAGE_KEY = 'moto_inv_data';
+
+const DEF_STATE = {
+  investors: [
+    { id: 'octa', name: 'Octavio', initials: 'OC', color: '#534AB7', cap: 4600 },
+    { id: 'nacho', name: 'Nacho', initials: 'NA', color: '#0F6E56', cap: 2500 },
+    { id: 'anita', name: 'Anita', initials: 'AN', color: '#993C1D', cap: 2500 }
+  ],
+  motos: [
+    {
+      id: 'm1', name: '2016 Kawasaki Ninja ZX-6R', cost: 5850, buyDate: '2026-03-19',
+      sold: true, saleDate: '2026-05-16', salePrice: 8000, comm: 10, netSale: 7200,
+      extras: { octa: 0, nacho: 0, anita: 0 }, extraCosts: []
+    },
+    {
+      id: 'm2', name: '2019 Harley Davidson 883 Iron', cost: 3750, buyDate: '2026-03-19',
+      sold: false, saleDate: null, salePrice: null, comm: 10, netSale: null,
+      extras: { octa: 0, nacho: 0, anita: 0 }, extraCosts: []
+    }
+  ],
+  nextId: 3
+};
+
+// ─── STATE ────────────────────────────────────────────────
+let S = null;
+let activeTab = 'resumen';
+let sellMotoId = null;
+let editMotoId = null;
+let costMotoId = null;
+let chartInst = null;
+let saveTimer = null;
+
+// ─── PIN ──────────────────────────────────────────────────
+function checkPin() {
+  const val = document.getElementById('pinInput').value;
+  if (val === PIN) {
+    document.getElementById('gateScreen').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('pinError').textContent = 'PIN incorrecto, intentá de nuevo.';
+    document.getElementById('pinInput').value = '';
+  }
+}
+
+// ─── STORAGE (localStorage) ───────────────────────────────
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    S = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEF_STATE));
+  } catch(e) {
+    S = JSON.parse(JSON.stringify(DEF_STATE));
+  }
+  renderAll();
+}
+
+function schedSave() {
+  setSavePill('Guardando...', 'saving');
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
+      setSavePill('✓ Guardado', '');
+    } catch(e) {
+      setSavePill('Error al guardar', 'error');
+    }
+  }, 600);
+}
+
+function setSavePill(txt, cls) {
+  const el = document.getElementById('savePill');
+  el.textContent = txt;
+  el.className = 'save-pill ' + cls;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────
+const tod = () => new Date().toISOString().split('T')[0];
+const dys = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+const fmt = n => '$' + Math.round(n).toLocaleString('es-AR');
+const pct = n => (n * 100).toFixed(1) + '%';
+const fD = d => {
+  if (!d) return '-';
+  const [y, m, dd] = d.split('-');
+  const ms = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return `${+dd} ${ms[+m-1]} ${y}`;
+};
+const hld = d => {
+  if (d < 1) return '0d';
+  if (d < 30) return `${d}d`;
+  const mo = Math.floor(d / 30), r = d % 30;
+  return r ? `${mo}m ${r}d` : `${mo}m`;
+};
+
+// ─── MATH ─────────────────────────────────────────────────
+const totalInit = () => S.investors.reduce((a, i) => a + i.cap, 0);
+const invSh = inv => inv.cap / totalInit();
+const extraCostTotal = m => (m.extraCosts || []).reduce((a, c) => a + c.amount, 0);
+const effCost = m => m.cost + extraCostTotal(m);
+const motoInvCost = (m, inv) => {
+  const te = Object.values(m.extras || {}).reduce((a, b) => a + b, 0);
+  return Math.max(0, (effCost(m) - te) * invSh(inv)) + (m.extras[inv.id] || 0);
+};
+const motoGain = m => m.sold ? m.netSale - effCost(m) : null;
+const invGainMoto = (m, inv) => {
+  if (!m.sold) return 0;
+  const g = motoGain(m);
+  const p = effCost(m) > 0 ? motoInvCost(m, inv) / effCost(m) : invSh(inv);
+  return g * p;
+};
+const invTotCap = inv => inv.cap + S.motos.filter(m => m.sold).reduce((a, m) => a + invGainMoto(m, inv), 0);
+const totCap = () => totalInit() + S.motos.filter(m => m.sold).reduce((a, m) => a + (motoGain(m) || 0), 0);
+
+// ─── RENDER ───────────────────────────────────────────────
+function renderAll() { renderKPIs(); renderTab(); }
+
+function renderKPIs() {
+  const cap = totCap(), init = totalInit(), gain = cap - init, roi = gain / init;
+  const dA = dys('2026-03-19', tod());
+  const mr = dA > 0 ? roi / (dA / 30) : 0;
+  const sold = S.motos.filter(m => m.sold).length;
+  const act = S.motos.filter(m => !m.sold).length;
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi"><div class="kpi-label">Capital total</div><div class="kpi-value">${fmt(cap)}</div><div class="kpi-sub">Inicio ${fmt(init)}</div></div>
+    <div class="kpi"><div class="kpi-label">Ganancia</div><div class="kpi-value up">${fmt(gain)}</div><div class="kpi-sub">ROI ${pct(roi)}</div></div>
+    <div class="kpi"><div class="kpi-label">Rend. mensual</div><div class="kpi-value up">${pct(mr)}</div><div class="kpi-sub">Sobre ventas</div></div>
+    <div class="kpi"><div class="kpi-label">En cartera</div><div class="kpi-value">${act}</div><div class="kpi-sub">${sold} vendida${sold !== 1 ? 's' : ''}</div></div>
+  `;
+}
+
+function sw(t) {
+  activeTab = t;
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  renderTab();
+}
+
+function renderTab() {
+  const el = document.getElementById('tabContent');
+  if (!el) return;
+  if (activeTab === 'resumen') el.innerHTML = rResumen();
+  else if (activeTab === 'motos') el.innerHTML = rMotos();
+  else if (activeTab === 'socios') el.innerHTML = rSocios();
+  else if (activeTab === 'historial') el.innerHTML = rHistorial();
+  else if (activeTab === 'proyeccion') el.innerHTML = rProyeccion();
+  else if (activeTab === 'simulador') el.innerHTML = rSimulador();
+  if (activeTab === 'resumen') setTimeout(rEvoChart, 80);
+  if (activeTab === 'proyeccion') bindProj();
+}
+
+// ─── RESUMEN ──────────────────────────────────────────────
+function rResumen() {
+  const cap = totCap();
+  const rows = S.investors.map(inv => {
+    const c = invTotCap(inv), g = c - inv.cap, r = g / inv.cap, sp = c / cap;
+    return `<div class="inv-row">
+      <div class="avatar" style="background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${inv.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${fmt(inv.cap)} → <span style="color:var(--green)">${fmt(c)}</span> (+${pct(r)})</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${(sp*100).toFixed(1)}%;background:${inv.color}"></div></div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700">${fmt(c)}</div>
+        <div style="font-size:11px;color:var(--muted)">${pct(sp)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="section-label">Capital por socio</div>
+    <div class="card" style="padding:12px 14px;margin-bottom:16px">${rows}</div>
+    <div class="section-label">Evolución del capital</div>
+    <div class="legend" id="chartLegend"></div>
+    <div class="chart-wrap"><canvas id="evoChart"></canvas></div>
+  `;
+}
+
+function rEvoChart() {
+  const ctx = document.getElementById('evoChart');
+  if (!ctx) return;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  const labels = ['Inicio'];
+  const datasets = S.investors.map(inv => ({
+    label: inv.name, data: [inv.cap],
+    borderColor: inv.color, backgroundColor: inv.color + '18',
+    tension: .4, fill: false, pointRadius: 4, pointBackgroundColor: inv.color, borderWidth: 2
+  }));
+  let run = S.investors.map(i => i.cap);
+  S.motos.filter(m => m.sold).sort((a, b) => a.saleDate > b.saleDate ? 1 : -1).forEach(m => {
+    labels.push(fD(m.saleDate));
+    S.investors.forEach((inv, i) => { run[i] += invGainMoto(m, inv); datasets[i].data.push(Math.round(run[i])); });
+  });
+  const leg = document.getElementById('chartLegend');
+  if (leg) leg.innerHTML = S.investors.map(inv => `<span class="leg-item"><span class="leg-dot" style="background:${inv.color}"></span>${inv.name}</span>`).join('');
+  chartInst = new Chart(ctx, {
+    type: 'line', data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks: { callback: v => '$' + Math.round(v / 1000) + 'k' }, grid: { color: 'rgba(0,0,0,.05)' } },
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ─── MOTOS ────────────────────────────────────────────────
+function rMotos() {
+  const sold = S.motos.filter(m => m.sold);
+  const act = S.motos.filter(m => !m.sold);
+  const td = tod();
+  let html = '';
+
+  if (sold.length) {
+    html += `<div class="section-label">Vendidas</div>`;
+    sold.forEach(m => {
+      const ec = extraCostTotal(m), g = motoGain(m), gp = g / effCost(m);
+      const d = dys(m.buyDate, m.saleDate), gpd = g / d, mroi = (gpd * 30) / effCost(m);
+      const ecItems = (m.extraCosts || []).map(c =>
+        `<div class="extra-item"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small></span><span class="row-neg">-${fmt(c.amount)}</span></div>`
+      ).join('');
+      const invP = S.investors.map(inv =>
+        `<div class="card-row"><span class="row-label" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="row-gain">+${fmt(invGainMoto(m, inv))}</span></div>`
+      ).join('');
+      html += `<div class="card">
+        <div class="moto-head"><div><div class="moto-name">${m.name}</div><div class="moto-date">${fD(m.buyDate)} → ${fD(m.saleDate)}</div></div><span class="badge b-sold">Vendida</span></div>
+        <div class="card-row" style="border-top:none"><span class="row-label">Costo compra</span><span class="row-val">${fmt(m.cost)}</span></div>
+        ${ec > 0 ? `<div class="card-row"><span class="row-label">Costos extra</span><span class="row-neg">+${fmt(ec)}</span></div><div class="card-row"><span class="row-label">Costo total</span><span class="row-val">${fmt(effCost(m))}</span></div>` : ''}
+        <div class="card-row"><span class="row-label">Precio venta</span><span class="row-val">${fmt(m.salePrice)}</span></div>
+        <div class="card-row"><span class="row-label">Comisión ${m.comm}%</span><span class="row-neg">-${fmt(m.salePrice * m.comm / 100)}</span></div>
+        <div class="card-row"><span class="row-label">Neto recibido</span><span class="row-val">${fmt(m.netSale)}</span></div>
+        <div class="card-row"><span class="row-label">Ganancia neta</span><span class="row-gain">${fmt(g)} · ${pct(gp)}</span></div>
+        <div class="time-strip">
+          <div class="tc"><div class="tv">${hld(d)}</div><div class="tl">En cartera</div></div>
+          <div class="tc"><div class="tv up">${fmt(gpd)}/d</div><div class="tl">Gan. diaria</div></div>
+          <div class="tc"><div class="tv up">${pct(mroi)}/m</div><div class="tl">ROI mensual</div></div>
+        </div>
+        ${ecItems ? `<div style="font-size:11px;color:var(--muted);margin:6px 0 2px">Costos adicionales:</div>${ecItems}` : ''}
+        <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio:</div>${invP}
+      </div>`;
+    });
+  }
+
+  html += `<div class="section-label" style="margin-top:${sold.length ? '8px' : '0'}">En cartera</div>`;
+  if (act.length) {
+    act.forEach(m => {
+      const ec = extraCostTotal(m), d = dys(m.buyDate, td);
+      const ecItems = (m.extraCosts || []).map((c, i) =>
+        `<div class="extra-item"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small></span><div style="display:flex;align-items:center;gap:8px"><span class="row-neg">-${fmt(c.amount)}</span><button class="btn-sm btn-danger-sm" onclick="delCost('${m.id}',${i})">✕</button></div></div>`
+      ).join('');
+      const invP = S.investors.map(inv => {
+        const ic = motoInvCost(m, inv), ip = ic / effCost(m);
+        return `<div class="card-row"><span class="row-label" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="row-val">${fmt(ic)} <small style="font-weight:400;color:var(--muted)">(${pct(ip)})</small></span></div>`;
+      }).join('');
+      html += `<div class="card">
+        <div class="moto-head"><div><div class="moto-name">${m.name}</div><div class="moto-date">Comprada ${fD(m.buyDate)} · ${hld(d)} en cartera</div></div><span class="badge b-active">Activa</span></div>
+        <div class="card-row" style="border-top:none"><span class="row-label">Costo compra</span><span class="row-val">${fmt(m.cost)}</span></div>
+        ${ec > 0 ? `<div class="card-row"><span class="row-label">Costos extra</span><span class="row-neg">+${fmt(ec)}</span></div><div class="card-row"><span class="row-label">Costo total</span><span class="row-val">${fmt(effCost(m))}</span></div>` : ''}
+        ${ecItems ? `<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Costos adicionales:</div>${ecItems}` : ''}
+        <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Participación por socio:</div>${invP}
+        <div class="btn-row">
+          <button class="btn btn-green" style="flex:1" onclick="openSell('${m.id}')">💰 Registrar venta</button>
+          <button class="btn btn-outline" style="width:auto;padding:10px 14px" onclick="openEditMoto('${m.id}')">✏️</button>
+        </div>
+        <button class="btn btn-amber" style="margin-top:8px" onclick="openAddCost('${m.id}')">🔧 Agregar costo (service / reparación)</button>
+      </div>`;
+    });
+  } else {
+    html += `<p style="font-size:13px;color:var(--muted);margin-bottom:12px">No hay motos en cartera.</p>`;
+  }
+  html += `<button class="btn btn-dashed" onclick="openOverlay('overlayAddMoto')">+ Agregar nueva moto</button>`;
+  return html;
+}
+
+// ─── SOCIOS ───────────────────────────────────────────────
+function rSocios() {
+  const sold = S.motos.filter(m => m.sold);
+  const dA = dys('2026-03-19', tod());
+  return S.investors.map(inv => {
+    const c = invTotCap(inv), g = c - inv.cap, r = g / inv.cap, mr = dA > 0 ? r / (dA / 30) : 0;
+    const mRows = sold.map(m => {
+      const d = dys(m.buyDate, m.saleDate);
+      return `<div class="card-row"><span class="row-label" style="font-size:12px">${m.name.split(' ').slice(0,3).join(' ')} <small>(${hld(d)})</small></span><span class="row-gain">+${fmt(invGainMoto(m, inv))}</span></div>`;
+    }).join('');
+    return `<div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <div class="avatar" style="width:44px;height:44px;background:${inv.color}22;color:${inv.color};font-size:15px;font-weight:700">${inv.initials}</div>
+        <div><div style="font-size:15px;font-weight:700">${inv.name}</div><div style="font-size:11px;color:var(--muted)">${pct(invSh(inv))} del capital inicial</div></div>
+      </div>
+      <div class="card-row" style="border-top:none"><span class="row-label">Capital inicial</span><span class="row-val">${fmt(inv.cap)}</span></div>
+      <div class="card-row"><span class="row-label">Ganancias</span><span class="row-gain">+${fmt(g)}</span></div>
+      <div class="card-row"><span class="row-label">Capital actual</span><span class="row-val" style="font-size:16px">${fmt(c)}</span></div>
+      <div class="card-row"><span class="row-label">ROI total</span><span class="row-gain">${pct(r)}</span></div>
+      <div class="card-row"><span class="row-label">ROI mensual prom.</span><span class="row-gain">${pct(mr)}/mes</span></div>
+      ${sold.length ? `<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Por moto:</div>${mRows}` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ─── HISTORIAL ────────────────────────────────────────────
+function rHistorial() {
+  const events = [];
+  events.push({ date: '2026-03-19', label: 'Inicio del negocio', sub: `Capital: ${fmt(totalInit())}`, color: '#534AB7', icon: '🚀' });
+  S.motos.forEach(m => {
+    events.push({ date: m.buyDate, label: `Compra: ${m.name.split(' ').slice(0,3).join(' ')}`, sub: `Costo ${fmt(m.cost)}`, color: '#185FA5', icon: '🛒' });
+    (m.extraCosts || []).forEach(c => events.push({ date: c.date, label: `Gasto: ${c.desc}`, sub: `${m.name.split(' ').slice(0,2).join(' ')} · -${fmt(c.amount)}`, color: '#854F0B', icon: '🔧' }));
+    if (m.sold) events.push({ date: m.saleDate, label: `Venta: ${m.name.split(' ').slice(0,3).join(' ')}`, sub: `Ganancia ${fmt(motoGain(m))}`, color: '#3B6D11', icon: '💰' });
+  });
+  events.sort((a, b) => a.date > b.date ? 1 : -1);
+  const items = events.map((e, i) => `
+    <div class="tl-item">
+      <div class="tl-dc"><div class="tl-dot" style="background:${e.color}"></div>${i < events.length - 1 ? '<div class="tl-line"></div>' : ''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${e.icon} ${e.label}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fD(e.date)} · ${e.sub}</div>
+      </div>
+    </div>`).join('');
+  return `<div class="section-label">Línea de tiempo</div><div class="card">${items}</div>`;
+}
+
+// ─── PROYECCIÓN ───────────────────────────────────────────
+function rProyeccion() {
+  const cap = totCap(), init = totalInit(), gain = cap - init, dA = dys('2026-03-19', tod());
+  const avgMr = dA > 0 ? (gain / init) / (dA / 30) : 0.05;
+  const initRate = Math.max(1, Math.round(avgMr * 100));
+  return `
+    <div class="section-label">Proyección compuesta</div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-row" style="border-top:none"><span class="row-label">Capital base</span><span class="row-val">${fmt(cap)}</span></div>
+      <div class="card-row"><span class="row-label">ROI mensual actual</span><span class="row-gain">${pct(avgMr)}/mes</span></div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">Ajustá el ROI mensual esperado</div>
+      <div class="range-wrap">
+        <input type="range" id="projRate" min="1" max="30" step="1" value="${initRate}">
+        <span class="range-val" id="projRateOut">${initRate}%</span>
+      </div>
+    </div>
+    <div id="projTable"></div>
+  `;
+}
+function bindProj() {
+  const sl = document.getElementById('projRate');
+  if (!sl) return;
+  const upd = () => {
+    const r = parseInt(sl.value) / 100;
+    document.getElementById('projRateOut').textContent = `${parseInt(sl.value)}%`;
+    const cap = totCap();
+    const rows = [1, 2, 3, 6, 9, 12, 18, 24].map(mo => {
+      const proj = cap * Math.pow(1 + r, mo), g = proj - cap;
+      return `<div class="proj-row"><span style="color:var(--muted)">${mo} mes${mo > 1 ? 'es' : ''}</span><div style="text-align:right"><span style="font-weight:600">${fmt(proj)}</span><span style="font-size:12px;color:var(--green);margin-left:8px">+${fmt(g)}</span></div></div>`;
+    }).join('');
+    document.getElementById('projTable').innerHTML = `<div class="card">${rows}</div>`;
+  };
+  sl.addEventListener('input', upd);
+  upd();
+}
+
+// ─── SIMULADOR ────────────────────────────────────────────
+function rSimulador() {
+  const act = S.motos.filter(m => !m.sold);
+  const opts = act.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+  return `
+    <div class="section-label">Simulador de venta</div>
+    <div class="card" style="margin-bottom:12px">
+      ${!act.length ? `<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>` : `
+      <div class="fg"><label>Moto</label><select id="simMoto">${opts}</select></div>
+      <div class="fg"><label>Precio hipotético (USD)</label><input type="number" id="simPrecio" placeholder="0"></div>
+      <div class="fg"><label>% comisión</label><input type="number" id="simComm" value="10"></div>
+      <button class="btn btn-primary" onclick="calcSim()">🔢 Calcular</button>`}
+    </div>
+    <div id="simResults"></div>
+  `;
+}
+function calcSim() {
+  const motoId = document.getElementById('simMoto').value;
+  const precio = parseFloat(document.getElementById('simPrecio').value);
+  const comm = parseFloat(document.getElementById('simComm').value) || 10;
+  if (!precio || precio <= 0) { alert('Ingresá un precio válido.'); return; }
+  const m = S.motos.find(x => x.id === motoId);
+  if (!m) return;
+  const neto = precio * (1 - comm / 100), ec = effCost(m), gain = neto - ec;
+  const d = dys(m.buyDate, tod()), gpd = d > 0 ? gain / d : 0, mroi = ec > 0 ? (gpd * 30) / ec : 0;
+  const nuevoTot = totCap() + gain;
+  const invRows = S.investors.map(inv => {
+    const p = ec > 0 ? motoInvCost(m, inv) / ec : invSh(inv), ig = gain * p, nc = invTotCap(inv) + ig;
+    return `<div class="card-row"><span class="row-label" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${gain >= 0 ? 'row-gain' : 'row-neg'}">${gain >= 0 ? '+' : ''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;
+  }).join('');
+  document.getElementById('simResults').innerHTML = `
+    <div class="sim-grid">
+      <div class="sim-r"><div class="sim-rv" style="color:${gain >= 0 ? 'var(--green)' : 'var(--red)'}">${fmt(gain)}</div><div class="sim-rl">Ganancia</div></div>
+      <div class="sim-r"><div class="sim-rv" style="color:${gain >= 0 ? 'var(--green)' : 'var(--red)'}">${pct(gain / ec)}</div><div class="sim-rl">ROI</div></div>
+      <div class="sim-r"><div class="sim-rv">${fmt(neto)}</div><div class="sim-rl">Neto recibido</div></div>
+      <div class="sim-r"><div class="sim-rv" style="color:${mroi >= 0 ? 'var(--green)' : 'var(--red)'}">${pct(mroi)}/m</div><div class="sim-rl">ROI mensual</div></div>
+    </div>
+    <div class="card">
+      <div class="card-row" style="border-top:none"><span class="row-label">Nuevo capital total</span><span class="row-val">${fmt(nuevoTot)}</span></div>
+      <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio:</div>${invRows}
+    </div>`;
+}
+
+// ─── MODAL HELPERS ────────────────────────────────────────
+function openOverlay(id) { document.getElementById(id).classList.add('open'); }
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+// ─── ADD MOTO ─────────────────────────────────────────────
+function openOverlay(id) {
+  document.getElementById(id).classList.add('open');
+  if (id === 'overlayAddMoto') {
+    document.getElementById('mFecha').value = tod();
+    document.getElementById('mNom').value = '';
+    document.getElementById('mCosto').value = '';
+    const cont = document.getElementById('mExtras');
+    cont.innerHTML = S.investors.map(inv => `<div class="contrib-row"><span class="contrib-name">${inv.name}</span><input type="number" id="mEx_${inv.id}" placeholder="0" min="0"></div>`).join('');
+  }
+}
+function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
+
+function doAddMoto() {
+  const name = document.getElementById('mNom').value.trim();
+  const cost = parseFloat(document.getElementById('mCosto').value);
+  const buyDate = document.getElementById('mFecha').value;
+  if (!name || isNaN(cost) || cost <= 0 || !buyDate) { alert('Completá todos los campos.'); return; }
+  const extras = {};
+  S.investors.forEach(inv => { const el = document.getElementById('mEx_' + inv.id); extras[inv.id] = el ? parseFloat(el.value) || 0 : 0; });
+  S.motos.push({ id: 'm' + S.nextId++, name, cost, buyDate, sold: false, saleDate: null, salePrice: null, comm: 10, netSale: null, extras, extraCosts: [] });
+  schedSave(); closeOverlay('overlayAddMoto'); renderAll();
+}
+
+// ─── EDIT MOTO ────────────────────────────────────────────
+function openEditMoto(id) {
+  editMotoId = id;
+  const m = S.motos.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('eNom').value = m.name;
+  document.getElementById('eFecha').value = m.buyDate;
+  document.getElementById('eCosto').value = m.cost;
+  const cont = document.getElementById('eExtras');
+  cont.innerHTML = S.investors.map(inv => `<div class="contrib-row"><span class="contrib-name">${inv.name}</span><input type="number" id="eEx_${inv.id}" value="${m.extras[inv.id] || 0}" min="0"></div>`).join('');
+  document.getElementById('overlayEditMoto').classList.add('open');
+}
+function doEditMoto() {
+  const m = S.motos.find(x => x.id === editMotoId);
+  if (!m) return;
+  const name = document.getElementById('eNom').value.trim();
+  const cost = parseFloat(document.getElementById('eCosto').value);
+  const buyDate = document.getElementById('eFecha').value;
+  if (!name || isNaN(cost) || cost <= 0 || !buyDate) { alert('Completá todos los campos.'); return; }
+  m.name = name; m.cost = cost; m.buyDate = buyDate;
+  S.investors.forEach(inv => { const el = document.getElementById('eEx_' + inv.id); m.extras[inv.id] = el ? parseFloat(el.value) || 0 : 0; });
+  schedSave(); closeOverlay('overlayEditMoto'); renderAll();
+}
+
+// ─── SELL ─────────────────────────────────────────────────
+function openSell(id) {
+  sellMotoId = id;
+  document.getElementById('sFecha').value = tod();
+  document.getElementById('sPrecio').value = '';
+  document.getElementById('sComm').value = '10';
+  document.getElementById('overlaySell').classList.add('open');
+}
+function doSell() {
+  const sp = parseFloat(document.getElementById('sPrecio').value);
+  const comm = parseFloat(document.getElementById('sComm').value) || 10;
+  const saleDate = document.getElementById('sFecha').value;
+  if (!sp || sp <= 0 || !saleDate) { alert('Completá todos los campos.'); return; }
+  const m = S.motos.find(x => x.id === sellMotoId);
+  if (m) { m.sold = true; m.salePrice = sp; m.comm = comm; m.netSale = sp * (1 - comm / 100); m.saleDate = saleDate; }
+  schedSave(); closeOverlay('overlaySell'); renderAll();
+}
+
+// ─── EXTRA COSTS ──────────────────────────────────────────
+function openAddCost(id) {
+  costMotoId = id;
+  document.getElementById('cDesc').value = '';
+  document.getElementById('cAmt').value = '';
+  document.getElementById('cDate').value = tod();
+  document.getElementById('overlayAddCost').classList.add('open');
+}
+function doAddCost() {
+  const desc = document.getElementById('cDesc').value.trim();
+  const amt = parseFloat(document.getElementById('cAmt').value);
+  const date = document.getElementById('cDate').value;
+  if (!desc || isNaN(amt) || amt <= 0) { alert('Completá descripción y monto.'); return; }
+  const m = S.motos.find(x => x.id === costMotoId);
+  if (!m.extraCosts) m.extraCosts = [];
+  m.extraCosts.push({ desc, amount: amt, date });
+  schedSave(); closeOverlay('overlayAddCost'); renderAll();
+}
+function delCost(motoId, idx) {
+  if (!confirm('¿Eliminar este costo?')) return;
+  const m = S.motos.find(x => x.id === motoId);
+  if (m && m.extraCosts) m.extraCosts.splice(idx, 1);
+  schedSave(); renderAll();
+}
+
+// Close overlay on backdrop click
+document.querySelectorAll('.overlay').forEach(ov => {
+  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+});
+</script>
+</body>
+</html>
