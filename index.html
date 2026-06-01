@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5,6 +6,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Moto Inversiones</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAEgGZr77vdEebDypkByY7HCY7h31Az5rM",
+  authDomain: "moto-investments.firebaseapp.com",
+  projectId: "moto-investments",
+  storageBucket: "moto-investments.firebasestorage.app",
+  messagingSenderId: "883185404916",
+  appId: "1:883185404916:web:e6dafd26fb552b249607a1"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const DOC_REF = doc(db, 'moto-inversiones', 'data');
+
+// Expose to global scope so existing code can use it
+window._db = db;
+window._docRef = DOC_REF;
+window._onSnapshot = onSnapshot;
+window._setDoc = setDoc;
+window._getDoc = getDoc;
+window._firebaseReady = true;
+</script>
 <style>
   :root {
     --purple:#534AB7;--green:#3B6D11;--green-bg:#EAF3DE;--green-text:#27500A;
@@ -214,7 +240,7 @@
 
 <script>
 const PIN = '1234';
-const SK = 'moto_inv_v5';
+const SK = 'moto_inv_v5'; // fallback local
 
 const DEF = {
   investors:[
@@ -251,33 +277,71 @@ function checkPin(){
 }
 
 // ── STORAGE ──────────────────────────────────────────────
+function migrateState(parsed){
+  if(!parsed) return JSON.parse(JSON.stringify(DEF));
+  parsed.motos.forEach(m=>{
+    if(!m.extras)m.extras={};
+    if(!m.extraCosts)m.extraCosts=[];
+    DEF.investors.forEach(i=>{if(m.extras[i.id]===undefined)m.extras[i.id]=0;});
+    m.extraCosts.forEach(c=>{if(!c.payer)c.payer='';});
+  });
+  return parsed;
+}
+
 function loadData(){
-  try {
-    const raw=localStorage.getItem(SK);
-    if(raw){
-      S=JSON.parse(raw);
-      // migración: asegurar campos
-      S.motos.forEach(m=>{
-        if(!m.extras)m.extras={};
-        if(!m.extraCosts)m.extraCosts=[];
-        DEF.investors.forEach(i=>{if(m.extras[i.id]===undefined)m.extras[i.id]=0;});
-        // migración: extraCosts con payer
-        m.extraCosts.forEach(c=>{if(!c.payer)c.payer='';});
+  pill('Cargando...','saving');
+  // Wait for Firebase module to be ready
+  const tryLoad = () => {
+    if(window._firebaseReady && window._docRef && window._onSnapshot){
+      // Listen for real-time updates from Firestore
+      window._onSnapshot(window._docRef, (snap) => {
+        if(snap.exists()){
+          S = migrateState(snap.data());
+        } else {
+          // First time: save default state to Firestore
+          S = JSON.parse(JSON.stringify(DEF));
+          window._setDoc(window._docRef, S);
+        }
+        renderAll();
+        pill('✓ Sincronizado','');
+      }, (err) => {
+        console.warn('Firestore error, using localStorage:', err);
+        loadFromLocal();
       });
     } else {
-      S=JSON.parse(JSON.stringify(DEF));
+      setTimeout(tryLoad, 100);
     }
+  };
+  tryLoad();
+}
+
+function loadFromLocal(){
+  try{
+    const raw=localStorage.getItem(SK);
+    S = raw ? migrateState(JSON.parse(raw)) : JSON.parse(JSON.stringify(DEF));
   } catch(e){ S=JSON.parse(JSON.stringify(DEF)); }
   renderAll();
+  pill('✓ Guardado (local)','');
 }
 
 function schedSave(){
   pill('Guardando...','saving');
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{
-    try{ localStorage.setItem(SK,JSON.stringify(S)); pill('✓ Guardado',''); }
-    catch(e){ pill('Error al guardar','error'); }
-  },600);
+  saveTimer=setTimeout(async ()=>{
+    try{
+      if(window._firebaseReady && window._setDoc && window._docRef){
+        await window._setDoc(window._docRef, JSON.parse(JSON.stringify(S)));
+        pill('✓ Sincronizado','');
+      } else {
+        localStorage.setItem(SK, JSON.stringify(S));
+        pill('✓ Guardado (local)','');
+      }
+    } catch(e){
+      console.warn('Save error:', e);
+      try{ localStorage.setItem(SK, JSON.stringify(S)); } catch(e2){}
+      pill('Error al guardar','error');
+    }
+  },800);
 }
 
 function pill(t,c){ const e=document.getElementById('savePill'); e.textContent=t; e.className='save-pill '+c; }
