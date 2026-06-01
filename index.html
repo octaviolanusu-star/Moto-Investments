@@ -356,11 +356,16 @@ function renderKPIs(){
   const dA=dys('2026-03-19',tod());
   const mr=dA>0?roi/(dA/30):0;
   const sold=S.motos.filter(m=>m.sold).length, act=S.motos.filter(m=>!m.sold).length;
+  // ROI realizado: solo capital que participó en motos vendidas
+  const capRotado = S.motos.filter(m=>m.sold).reduce((a,m)=>a+effCost(m),0);
+  const roiRealizado = capRotado>0 ? gain/capRotado : 0;
+  const mrRealizado = dA>0 ? roiRealizado/(dA/30) : 0;
+
   document.getElementById('kpiGrid').innerHTML=`
     <div class="kpi"><div class="kpi-label">Capital total</div><div class="kpi-value">${fmt(cap)}</div><div class="kpi-sub">Invertido ${fmt(totalInv)}</div></div>
-    <div class="kpi"><div class="kpi-label">Ganancia</div><div class="kpi-value up">${fmt(gain)}</div><div class="kpi-sub">ROI ${pct(roi)}</div></div>
-    <div class="kpi"><div class="kpi-label">Rend. mensual</div><div class="kpi-value up">${pct(mr)}</div><div class="kpi-sub">Sobre ventas</div></div>
-    <div class="kpi"><div class="kpi-label">En cartera</div><div class="kpi-value">${act}</div><div class="kpi-sub">${sold} vendida${sold!==1?'s':''}</div></div>`;
+    <div class="kpi"><div class="kpi-label">Ganancia realizada</div><div class="kpi-value up">${fmt(gain)}</div><div class="kpi-sub">${sold} venta${sold!==1?'s':''}</div></div>
+    <div class="kpi"><div class="kpi-label">ROI realizado</div><div class="kpi-value up">${pct(roiRealizado)}</div><div class="kpi-sub">${pct(mrRealizado)}/mes · ventas cerradas</div></div>
+    <div class="kpi"><div class="kpi-label">ROI total</div><div class="kpi-value">${pct(roi)}</div><div class="kpi-sub">${pct(mr)}/mes · todo el capital</div></div>`;
 }
 
 function sw(t){
@@ -508,6 +513,9 @@ function rSocios(){
   return S.investors.map(inv=>{
     const c=invTotCap(inv), inv2=invTotalInvested(inv), g=invTotalGains(inv);
     const r=inv2>0?g/inv2:0, mr=dA>0?r/(dA/30):0;
+    // ROI realizado: sobre el capital que el socio puso en motos ya vendidas
+    const capRotadoInv=S.motos.filter(m=>m.sold).reduce((a,m)=>a+motoInvCost(m,inv),0);
+    const rRealizado=capRotadoInv>0?g/capRotadoInv:0;
     const extras=S.motos.reduce((a,m)=>{
       const eb=m.extras[inv.id]||0;
       const rep=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((s,c)=>s+c.amount,0);
@@ -527,8 +535,8 @@ function rSocios(){
       <div class="cr"><span class="crl">Total invertido</span><span class="crv">${fmt(inv2)}</span></div>
       <div class="cr"><span class="crl">Ganancias realizadas</span><span class="crg">+${fmt(g)}</span></div>
       <div class="cr"><span class="crl">Capital actual</span><span class="crv" style="font-size:16px">${fmt(c)}</span></div>
-      <div class="cr"><span class="crl">ROI total</span><span class="crg">${pct(r)}</span></div>
-      <div class="cr"><span class="crl">ROI mensual prom.</span><span class="crg">${pct(mr)}/mes</span></div>
+      <div class="cr"><span class="crl">ROI realizado</span><span class="crg">${pct(rRealizado)}/mes · ventas cerradas</span></div>
+      <div class="cr"><span class="crl">ROI total</span><span class="crg">${pct(r)} · todo el capital</span></div>
       ${sold.length?`<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Por moto:</div>${mRows}`:''}
     </div>`;
   }).join('');
