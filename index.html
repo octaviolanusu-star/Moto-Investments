@@ -574,19 +574,35 @@ function rProyeccion(){
   const avgMr=dA>0&&totalInv>0?(gain/totalInv)/(dA/30):0.05;
   const ir=Math.min(30,Math.max(1,Math.round(avgMr*100)));
   return`
-    <div class="sec-lbl">Proyección compuesta</div>
+    <div class="sec-lbl">Proyección de capital</div>
     <div class="card" style="margin-bottom:12px">
       <div class="cr" style="border-top:none"><span class="crl">Capital base actual</span><span class="crv">${fmt(cap)}</span></div>
-      <div class="cr"><span class="crl">ROI mensual actual</span><span class="crg">${pct(avgMr)}/mes</span></div>
+      <div class="cr"><span class="crl">ROI mensual realizado</span><span class="crg">${pct(avgMr)}/mes</span></div>
     </div>
+
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">Ajustá el ROI mensual esperado</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">ROI mensual esperado</div>
       <div class="range-wrap">
         <input type="range" id="projRate" min="1" max="30" step="1" value="${ir}">
         <span class="range-val" id="projRateOut">${ir}%</span>
       </div>
     </div>
-    <div id="projTable"></div>`;
+
+    <div class="sec-lbl" style="margin-top:4px">Meta de capital</div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">¿En cuánto tiempo llegás a tu meta?</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="metaInput" placeholder="Ej: 20000" min="0" style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+        <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="calcMeta()">Calcular</button>
+      </div>
+      <div id="metaResult" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
+    </div>
+
+    <div class="sec-lbl">Tabla de crecimiento</div>
+    <div id="projTable"></div>
+
+    <div class="sec-lbl" style="margin-top:4px">Proyección por moto en cartera</div>
+    <div id="projMotos"></div>`;
 }
 
 function bindProj(){
@@ -596,56 +612,161 @@ function bindProj(){
     const r=parseInt(sl.value)/100;
     document.getElementById('projRateOut').textContent=`${parseInt(sl.value)}%`;
     const cap=totCap();
+
+    // Tabla de crecimiento
     const rows=[1,2,3,6,9,12,18,24].map(mo=>{
       const proj=cap*Math.pow(1+r,mo), g=proj-cap;
       return`<div class="proj-row"><span style="color:var(--muted)">${mo} mes${mo>1?'es':''}</span><div style="text-align:right"><span style="font-weight:600">${fmt(proj)}</span><span style="font-size:12px;color:var(--green);margin-left:8px">+${fmt(g)}</span></div></div>`;
     }).join('');
     document.getElementById('projTable').innerHTML=`<div class="card">${rows}</div>`;
+
+    // Proyección por moto activa
+    const act=S.motos.filter(m=>!m.sold);
+    if(act.length){
+      const motoCards=act.map(m=>{
+        const ec=effCost(m);
+        const scenarios=[
+          {label:'Pesimista',mult:0.9,color:'var(--red)'},
+          {label:'Esperado',mult:1.15,color:'var(--amber)'},
+          {label:'Optimista',mult:1.3,color:'var(--green)'}
+        ];
+        const rows=scenarios.map(sc=>{
+          const venta=ec*sc.mult, neto=venta*(1-0.1), g=neto-ec;
+          const roi=g/ec;
+          return`<div class="cr"><span class="crl">${sc.label} (${fmt(venta)})</span><span style="font-weight:600;color:${sc.color}">${g>=0?'+':''}${fmt(g)} (${pct(roi)})</span></div>`;
+        }).join('');
+        return`<div class="card">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">${m.name}</div>
+          <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
+          <div class="cr"><span class="crl">Break-even (sin comisión)</span><span class="crv">${fmt(ec)}</span></div>
+          <div class="cr"><span class="crl">Break-even (con 10% comisión)</span><span class="crv">${fmt(ec/0.9)}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Escenarios de venta:</div>
+          ${rows}
+        </div>`;
+      }).join('');
+      document.getElementById('projMotos').innerHTML=motoCards;
+    } else {
+      document.getElementById('projMotos').innerHTML=`<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
+    }
   };
   sl.addEventListener('input',upd);
   upd();
 }
 
+function calcMeta(){
+  const meta=parseFloat(document.getElementById('metaInput').value);
+  const sl=document.getElementById('projRate');
+  if(!meta||meta<=0){document.getElementById('metaResult').textContent='Ingresá un monto válido.';return;}
+  const cap=totCap();
+  if(meta<=cap){document.getElementById('metaResult').innerHTML=`<span style="color:var(--green);font-weight:600">✓ Ya superás esa meta. Tu capital actual es ${fmt(cap)}.</span>`;return;}
+  const r=parseInt(sl.value)/100;
+  let meses=0, c=cap;
+  while(c<meta&&meses<600){c*=(1+r);meses++;}
+  const años=Math.floor(meses/12), mesRest=meses%12;
+  const tiempoStr=años>0?(mesRest>0?`${años} año${años>1?'s':''} y ${mesRest} mes${mesRest>1?'es':''}`:`${años} año${años>1?'s':''}`):`${meses} mes${meses>1?'es':''}`;
+  document.getElementById('metaResult').innerHTML=`Con un ROI de <strong>${parseInt(sl.value)}%/mes</strong>, llegás a <strong>${fmt(meta)}</strong> en <span style="color:var(--purple);font-weight:600">${tiempoStr}</span>.`;
+}
+
 // ── SIMULADOR ────────────────────────────────────────────
 function rSimulador(){
   const act=S.motos.filter(m=>!m.sold);
+  if(!act.length) return`<div class="sec-lbl">Simulador de venta</div><p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
   const opts=act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  const compareOpts=`<option value="">-- No comparar --</option>`+act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   return`
     <div class="sec-lbl">Simulador de venta</div>
     <div class="card" style="margin-bottom:12px">
-      ${!act.length?`<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`:`
-      <div class="fg"><label>Moto</label><select id="simMoto">${opts}</select></div>
-      <div class="fg"><label>Precio hipotético (USD)</label><input type="number" id="simPrecio" placeholder="0"></div>
-      <div class="fg"><label>% comisión</label><input type="number" id="simComm" value="10"></div>
-      <button class="btn btn-primary" onclick="calcSim()">🔢 Calcular</button>`}
+      <div class="fg"><label>Moto principal</label><select id="simMoto">${opts}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="fg" style="margin-bottom:0"><label>Pesimista ($)</label><input type="number" id="simP1" placeholder="0" min="0"></div>
+        <div class="fg" style="margin-bottom:0"><label>Esperado ($)</label><input type="number" id="simP2" placeholder="0" min="0"></div>
+        <div class="fg" style="margin-bottom:0"><label>Optimista ($)</label><input type="number" id="simP3" placeholder="0" min="0"></div>
+      </div>
+      <div class="fg" style="margin-top:12px"><label>% comisión</label><input type="number" id="simComm" value="10" min="0" max="100"></div>
+      <div class="fg"><label>Fecha estimada de venta</label><input type="date" id="simFechaVenta"></div>
+      <div class="fg"><label>Comparar con otra moto (opcional)</label><select id="simMoto2">${compareOpts}</select></div>
+      <button class="btn btn-primary" onclick="calcSim()">🔢 Calcular escenarios</button>
     </div>
     <div id="simResults"></div>`;
 }
 
+function simMotoCard(m, precio, comm, fechaVenta, label, color){
+  if(!precio||precio<=0) return'';
+  const neto=precio*(1-comm/100), ec=effCost(m), gain=neto-ec;
+  const roi=ec>0?gain/ec:0;
+  const dHeld=dys(m.buyDate, fechaVenta||tod());
+  const gpd=dHeld>0?gain/dHeld:0, mroi=ec>0?(gpd*30)/ec:0;
+  const breakEven=ec, breakEvenComm=ec/((100-comm)/100);
+  return`
+    <div style="background:${color}11;border:1px solid ${color}44;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${label}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+        <div><span style="color:var(--muted)">Precio venta</span><div style="font-weight:600">${fmt(precio)}</div></div>
+        <div><span style="color:var(--muted)">Neto recibido</span><div style="font-weight:600">${fmt(neto)}</div></div>
+        <div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':''}${fmt(gain)}</div></div>
+        <div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</div></div>
+        <div><span style="color:var(--muted)">ROI mensual</span><div style="font-weight:600;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div></div>
+        <div><span style="color:var(--muted)">Días en cartera</span><div style="font-weight:600">${dHeld}d</div></div>
+      </div>
+    </div>`;
+}
+
 function calcSim(){
   const mId=document.getElementById('simMoto').value;
-  const precio=parseFloat(document.getElementById('simPrecio').value);
+  const mId2=document.getElementById('simMoto2').value;
+  const p1=parseFloat(document.getElementById('simP1').value);
+  const p2=parseFloat(document.getElementById('simP2').value);
+  const p3=parseFloat(document.getElementById('simP3').value);
   const comm=parseFloat(document.getElementById('simComm').value)||10;
-  if(!precio||precio<=0){alert('Ingresá un precio válido.');return;}
+  const fechaVenta=document.getElementById('simFechaVenta').value||tod();
+  if(!p1&&!p2&&!p3){alert('Ingresá al menos un precio.');return;}
   const m=S.motos.find(x=>x.id===mId); if(!m)return;
-  const neto=precio*(1-comm/100), ec=effCost(m), gain=neto-ec;
-  const d=dys(m.buyDate,tod()), gpd=d>0?gain/d:0, mroi=ec>0?(gpd*30)/ec:0;
-  const nuevoTot=totCap()+gain;
-  const invRows=S.investors.map(inv=>{
-    const p=ec>0?motoInvCost(m,inv)/ec:invBaseSh(inv), ig=gain*p, nc=invTotCap(inv)+ig;
-    return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${gain>=0?'crg':'crn'}">${gain>=0?'+':''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;
-  }).join('');
-  document.getElementById('simResults').innerHTML=`
-    <div class="sim-grid">
-      <div class="sim-r"><div class="sim-rv" style="color:${gain>=0?'var(--green)':'var(--red)'}">${fmt(gain)}</div><div class="sim-rl">Ganancia</div></div>
-      <div class="sim-r"><div class="sim-rv" style="color:${gain>=0?'var(--green)':'var(--red)'}">${pct(gain/ec)}</div><div class="sim-rl">ROI</div></div>
-      <div class="sim-r"><div class="sim-rv">${fmt(neto)}</div><div class="sim-rl">Neto recibido</div></div>
-      <div class="sim-r"><div class="sim-rv" style="color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div><div class="sim-rl">ROI mensual</div></div>
-    </div>
-    <div class="card">
-      <div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nuevoTot)}</span></div>
-      <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio:</div>${invRows}
+  const ec=effCost(m);
+  const breakEven=ec, breakEvenComm=Math.ceil(ec/((100-comm)/100));
+
+  // Escenarios moto principal
+  let html=`
+    <div class="sec-lbl">${m.name.split(' ').slice(0,3).join(' ')}</div>
+    <div class="card" style="margin-bottom:4px">
+      <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
+      <div class="cr"><span class="crl">Break-even (sin comisión)</span><span class="crv">${fmt(breakEven)}</span></div>
+      <div class="cr"><span class="crl">Break-even (con ${comm}% comisión)</span><span class="crv">${fmt(breakEvenComm)}</span></div>
     </div>`;
+
+  if(p1) html+=simMotoCard(m,p1,comm,fechaVenta,'Pesimista','#A32D2D');
+  if(p2) html+=simMotoCard(m,p2,comm,fechaVenta,'Esperado','#854F0B');
+  if(p3) html+=simMotoCard(m,p3,comm,fechaVenta,'Optimista','#3B6D11');
+
+  // Mejor escenario: distribución por socio
+  const bestPrecio=p3||p2||p1;
+  const bestNeto=bestPrecio*(1-comm/100), bestGain=bestNeto-ec;
+  const nuevoTot=totCap()+bestGain;
+  const invRows=S.investors.map(inv=>{
+    const p=ec>0?motoInvCost(m,inv)/ec:invBaseSh(inv), ig=bestGain*p, nc=invTotCap(inv)+ig;
+    return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${bestGain>=0?'crg':'crn'}">${bestGain>=0?'+':''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;
+  }).join('');
+  html+=`<div class="card" style="margin-top:8px">
+    <div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nuevoTot)}</span></div>
+    <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio (escenario optimista):</div>${invRows}
+  </div>`;
+
+  // Comparación con segunda moto
+  if(mId2){
+    const m2=S.motos.find(x=>x.id===mId2);
+    if(m2&&m2.id!==m.id){
+      const ec2=effCost(m2);
+      html+=`<div class="sec-lbl" style="margin-top:12px">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div>
+      <div class="card" style="margin-bottom:4px">
+        <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div>
+        <div class="cr"><span class="crl">Break-even (con ${comm}% comisión)</span><span class="crv">${fmt(Math.ceil(ec2/((100-comm)/100)))}</span></div>
+      </div>`;
+      if(p1) html+=simMotoCard(m2,p1,comm,fechaVenta,'Pesimista','#A32D2D');
+      if(p2) html+=simMotoCard(m2,p2,comm,fechaVenta,'Esperado','#854F0B');
+      if(p3) html+=simMotoCard(m2,p3,comm,fechaVenta,'Optimista','#3B6D11');
+    }
+  }
+
+  document.getElementById('simResults').innerHTML=html;
 }
 
 // ── MODALES ──────────────────────────────────────────────
