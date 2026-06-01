@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -8,9 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-const firebaseConfig = {
+const cfg = {
   apiKey: "AIzaSyAEgGZr77vdEebDypkByY7HCY7h31Az5rM",
   authDomain: "moto-investments.firebaseapp.com",
   projectId: "moto-investments",
@@ -19,150 +19,202 @@ const firebaseConfig = {
   appId: "1:883185404916:web:e6dafd26fb552b249607a1"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const DOC_REF = doc(db, 'moto-inversiones', 'data');
+const app = initializeApp(cfg);
+const db  = getFirestore(app);
+const auth = getAuth(app);
+const gProvider = new GoogleAuthProvider();
 
-// Expose to global scope so existing code can use it
 window._db = db;
-window._docRef = DOC_REF;
-window._onSnapshot = onSnapshot;
-window._setDoc = setDoc;
+window._auth = auth;
+window._set = setDoc;
+window._doc = doc;
 window._getDoc = getDoc;
-window._firebaseReady = true;
+window._onSnap = onSnapshot;
+window._col = collection;
+window._query = query;
+window._where = where;
+window._getDocs = getDocs;
+
+window._signIn = () => signInWithPopup(auth, gProvider);
+window._signOut = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  window._user = user;
+  if (typeof window._onAuthChange === 'function') window._onAuthChange(user);
+});
+window._fbReady = true;
 </script>
 <style>
-  :root {
-    --purple:#534AB7;--green:#3B6D11;--green-bg:#EAF3DE;--green-text:#27500A;
-    --blue-bg:#E6F1FB;--blue-text:#0C447C;--amber:#854F0B;--amber-bg:#FAEEDA;
-    --red:#A32D2D;--border:#e5e7eb;--bg:#f9fafb;--card:#ffffff;
-    --text:#111827;--muted:#6b7280;--radius:12px;--radius-sm:8px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  .app{max-width:480px;margin:0 auto;padding:0 0 80px}
-  .header{background:#fff;border-bottom:1px solid var(--border);padding:14px 16px;position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between}
-  .header h1{font-size:17px;font-weight:600}
-  .header p{font-size:12px;color:var(--muted);margin-top:1px}
-  .save-pill{font-size:11px;padding:4px 10px;border-radius:20px;background:var(--green-bg);color:var(--green-text);font-weight:500}
-  .save-pill.saving{background:var(--amber-bg);color:var(--amber)}
-  .save-pill.error{background:#FCEBEB;color:#791F1F}
-  .kpi-section{padding:14px 16px}
-  .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px}
-  .kpi-label{font-size:11px;color:var(--muted);margin-bottom:4px}
-  .kpi-value{font-size:22px;font-weight:600;line-height:1}
-  .kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
-  .kpi-value.up{color:var(--green)}
-  .nav{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);scrollbar-width:none;position:sticky;top:57px;z-index:40}
-  .nav::-webkit-scrollbar{display:none}
-  .nav-btn{flex-shrink:0;padding:11px 16px;font-size:13px;font-weight:500;border:none;background:transparent;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
-  .nav-btn.active{color:var(--purple);border-bottom-color:var(--purple)}
-  .content{padding:16px}
-  .sec-lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px}
-  .cr{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:13px}
-  .cr:first-child{border-top:none}
-  .crl{color:var(--muted)}
-  .crv{font-weight:600}
-  .crg{font-weight:600;color:var(--green)}
-  .crn{font-weight:600;color:var(--red)}
-  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
-  .b-sold{background:var(--green-bg);color:var(--green-text)}
-  .b-active{background:var(--blue-bg);color:var(--blue-text)}
-  .moto-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
-  .moto-name{font-size:14px;font-weight:600;line-height:1.3}
-  .moto-date{font-size:11px;color:var(--muted);margin-top:2px}
-  .time-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--bg);border-radius:var(--radius-sm);padding:10px;margin:10px 0}
-  .tc{text-align:center}
-  .tv{font-size:13px;font-weight:600}
-  .tv.up{color:var(--green)}
-  .tl{font-size:10px;color:var(--muted);margin-top:2px}
-  .inv-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
-  .inv-row:first-child{border-top:none}
-  .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
-  .bar-wrap{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px}
-  .bar-fill{height:100%;border-radius:2px}
-  .btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;border:none;width:100%}
-  .btn-primary{background:var(--text);color:#fff}
-  .btn-primary:active{opacity:.85}
-  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted)}
-  .btn-green{background:transparent;border:1px solid var(--green);color:var(--green)}
-  .btn-green:active{background:var(--green-bg)}
-  .btn-amber{background:transparent;border:1px dashed var(--amber);color:var(--amber)}
-  .btn-dashed{background:transparent;border:1px dashed var(--border);color:var(--muted)}
-  .btn-sm{padding:5px 10px;font-size:12px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted)}
-  .btn-danger-sm{border-color:#fca5a5;color:var(--red)}
-  .btn-row{display:flex;gap:8px;margin-top:10px}
-  .extra-item{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px}
-  .extra-item:first-child{border-top:none}
-  .tl-item{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
-  .tl-item:first-child{border-top:none}
-  .tl-dc{display:flex;flex-direction:column;align-items:center;padding-top:3px}
-  .tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-  .tl-line{flex:1;width:1px;background:var(--border);margin-top:3px}
-  .chart-wrap{position:relative;width:100%;height:200px}
-  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
-  .leg-item{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
-  .leg-dot{width:10px;height:10px;border-radius:2px}
-  .proj-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);font-size:13px}
-  .proj-row:first-child{border-top:none}
-  .range-wrap{display:flex;align-items:center;gap:10px}
-  .range-wrap input[type=range]{flex:1;accent-color:var(--purple)}
-  .range-val{font-size:14px;font-weight:600;min-width:38px;text-align:right;color:var(--purple)}
-  .sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-  .sim-r{background:var(--bg);border-radius:var(--radius-sm);padding:12px;text-align:center;border:1px solid var(--border)}
-  .sim-rv{font-size:20px;font-weight:700}
-  .sim-rl{font-size:11px;color:var(--muted);margin-top:3px}
-  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-end;justify-content:center}
-  .overlay.open{display:flex}
-  .sheet{background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto}
-  .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
-  .sheet h3{font-size:16px;font-weight:600;margin-bottom:16px}
-  .fg{margin-bottom:14px}
-  .fg label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
-  .fg input,.fg select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:#fff;color:var(--text)}
-  .fg input:focus,.fg select:focus{outline:none;border-color:var(--purple)}
-  .sheet-actions{display:flex;gap:10px;margin-top:16px}
-  .sheet-actions .btn{flex:1}
-  .contrib-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-  .contrib-name{width:70px;font-size:13px;color:var(--muted)}
-  .contrib-row input{flex:1}
-  .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-  .gate-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:28px 24px;width:100%;max-width:360px;text-align:center}
-  .gate-card h2{font-size:20px;font-weight:700;margin-bottom:6px}
-  .gate-card p{font-size:13px;color:var(--muted);margin-bottom:20px}
-  .gate-card input{width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:15px;text-align:center;letter-spacing:4px;margin-bottom:12px}
-  .gate-error{font-size:13px;color:var(--red);margin-top:8px;min-height:20px}
+:root{--purple:#534AB7;--green:#3B6D11;--green-bg:#EAF3DE;--green-text:#27500A;--blue-bg:#E6F1FB;--blue-text:#0C447C;--amber:#854F0B;--amber-bg:#FAEEDA;--red:#A32D2D;--border:#e5e7eb;--bg:#f9fafb;--card:#fff;--text:#111827;--muted:#6b7280;--r:12px;--rs:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.app{max-width:480px;margin:0 auto;padding:0 0 80px}
+.hdr{background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hdr-left{display:flex;align-items:center;gap:10px;min-width:0}
+.hdr h1{font-size:16px;font-weight:600;white-space:nowrap}
+.hdr p{font-size:11px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:11px;padding:4px 10px;border-radius:20px;background:var(--green-bg);color:var(--green-text);font-weight:500;white-space:nowrap;flex-shrink:0}
+.pill.saving{background:var(--amber-bg);color:var(--amber)}
+.pill.error{background:#FCEBEB;color:#791F1F}
+.kpi-sec{padding:14px 16px}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px}
+.kpi-lbl{font-size:11px;color:var(--muted);margin-bottom:4px}
+.kpi-val{font-size:20px;font-weight:600;line-height:1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.kpi-val.up{color:var(--green)}
+.nav{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--border);scrollbar-width:none;position:sticky;top:57px;z-index:40}
+.nav::-webkit-scrollbar{display:none}
+.nav-btn{flex-shrink:0;padding:10px 13px;font-size:13px;font-weight:500;border:none;background:transparent;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.nav-btn.active{color:var(--purple);border-bottom-color:var(--purple)}
+.content{padding:16px}
+.slbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px}
+.slbl.mt{margin-top:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+.cr{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-top:1px solid var(--border);font-size:13px}
+.cr:first-child{border-top:none}
+.crl{color:var(--muted)}
+.crv{font-weight:600}
+.crg{font-weight:600;color:var(--green)}
+.crn{font-weight:600;color:var(--red)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.b-sold{background:var(--green-bg);color:var(--green-text)}
+.b-active{background:var(--blue-bg);color:var(--blue-text)}
+.moto-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
+.moto-name{font-size:14px;font-weight:600;line-height:1.3}
+.moto-date{font-size:11px;color:var(--muted);margin-top:2px}
+.ts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:var(--bg);border-radius:var(--rs);padding:10px;margin:10px 0}
+.tc{text-align:center}
+.tv{font-size:13px;font-weight:600}
+.tv.up{color:var(--green)}
+.tl-s{font-size:10px;color:var(--muted);margin-top:2px}
+.inv-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border)}
+.inv-row:first-child{border-top:none}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+.bw{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px}
+.bf{height:100%;border-radius:2px}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;cursor:pointer;border:none;width:100%}
+.btn-p{background:var(--text);color:#fff}
+.btn-o{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn-g{background:transparent;border:1px solid var(--green);color:var(--green)}
+.btn-g:active{background:var(--green-bg)}
+.btn-a{background:transparent;border:1px dashed var(--amber);color:var(--amber)}
+.btn-d{background:transparent;border:1px dashed var(--border);color:var(--muted)}
+.btn-r{background:transparent;border:1px solid var(--red);color:var(--red)}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--muted)}
+.btn-ds{border-color:#fca5a5;color:var(--red)}
+.btn-row{display:flex;gap:8px;margin-top:10px}
+.ei{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-top:1px solid var(--border);font-size:13px}
+.ei:first-child{border-top:none}
+.tli{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
+.tli:first-child{border-top:none}
+.tldc{display:flex;flex-direction:column;align-items:center;padding-top:3px}
+.tld{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.tll{flex:1;width:1px;background:var(--border);margin-top:3px}
+.cw{position:relative;width:100%;height:200px}
+.leg{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.li{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted)}
+.ld{width:10px;height:10px;border-radius:2px}
+.pr{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--border);font-size:13px}
+.pr:first-child{border-top:none}
+.rw{display:flex;align-items:center;gap:10px}
+.rw input[type=range]{flex:1;accent-color:var(--purple)}
+.rv{font-size:14px;font-weight:600;min-width:38px;text-align:right;color:var(--purple)}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.sr{background:var(--bg);border-radius:var(--rs);padding:12px;text-align:center;border:1px solid var(--border)}
+.sv{font-size:20px;font-weight:700}
+.sl{font-size:11px;color:var(--muted);margin-top:3px}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-end;justify-content:center}
+.ov.open{display:flex}
+.sh{background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto}
+.sh-h{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
+.sh h3{font-size:16px;font-weight:600;margin-bottom:16px}
+.fg{margin-bottom:14px}
+.fg label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
+.fg input,.fg select,.fg textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:#fff;color:var(--text)}
+.fg input:focus,.fg select:focus{outline:none;border-color:var(--purple)}
+.sa{display:flex;gap:10px;margin-top:16px}
+.sa .btn{flex:1}
+.cr-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cn{width:70px;font-size:13px;color:var(--muted)}
+.cr-row input{flex:1}
+.part-check{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+.part-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--purple)}
+.detail-panel{display:none;border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
+.detail-panel.open{display:block}
+.pool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;cursor:pointer}
+.pool-card:hover{border-color:var(--purple)}
+.pool-card h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.pool-card p{font-size:12px;color:var(--muted)}
+.login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:32px 24px;width:100%;max-width:360px;text-align:center}
+.login-card h1{font-size:24px;font-weight:700;margin-bottom:8px}
+.login-card p{font-size:14px;color:var(--muted);margin-bottom:28px}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--rs);background:#fff;font-size:14px;font-weight:500;cursor:pointer;color:var(--text)}
+.btn-google:hover{background:var(--bg)}
+.user-av{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.section-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0}
+.section-toggle .arrow{font-size:12px;color:var(--muted);transition:transform .2s}
+.section-toggle.open .arrow{transform:rotate(180deg)}
+.mov-badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.roi-table{width:100%;font-size:12px;border-collapse:collapse}
+.roi-table th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:4px 0;border-bottom:1px solid var(--border)}
+.roi-table td{padding:6px 0;border-bottom:1px solid var(--border)}
+.roi-table tr:last-child td{border-bottom:none}
+.pool-selector{padding:16px}
+.pool-selector h2{font-size:18px;font-weight:600;margin-bottom:4px}
+.pool-selector p{font-size:13px;color:var(--muted);margin-bottom:16px}
 </style>
 </head>
 <body>
 
-<div class="gate" id="gateScreen">
-  <div class="gate-card">
-    <div style="font-size:40px;margin-bottom:12px">🏍️</div>
-    <h2>Moto Inversiones</h2>
-    <p>Octavio · Nacho · Anita</p>
-    <input type="password" id="pinInput" placeholder="••••" maxlength="20" onkeydown="if(event.key==='Enter')checkPin()">
-    <button class="btn btn-primary" onclick="checkPin()">Entrar</button>
-    <div class="gate-error" id="pinError"></div>
+<!-- LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div style="font-size:48px;margin-bottom:16px">🏍️</div>
+    <h1>Moto Inversiones</h1>
+    <p>Iniciá sesión para acceder a tus pools de inversión</p>
+    <button class="btn-google" onclick="doSignIn()">
+      <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
+      Continuar con Google
+    </button>
+    <div id="loginError" style="font-size:13px;color:var(--red);margin-top:12px;min-height:20px"></div>
   </div>
 </div>
 
+<!-- POOL SELECTOR -->
+<div id="poolSelector" style="display:none">
+  <div class="pool-selector">
+    <h2>🏍️ Mis Pools</h2>
+    <p>Seleccioná un pool para ver tu inversión</p>
+    <div id="poolList"></div>
+    <button class="btn btn-d" id="btnNewPool" style="display:none" onclick="openNewPool()">+ Crear nuevo pool</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
 <div id="mainApp" style="display:none">
 <div class="app">
-  <div class="header">
-    <div>
-      <h1>🏍️ Moto Inversiones</h1>
-      <p>Octavio · Nacho · Anita</p>
+  <div class="hdr">
+    <div class="hdr-left">
+      <button class="btn-sm" onclick="backToPools()" style="padding:5px 8px;flex-shrink:0">← Pools</button>
+      <div>
+        <h1 id="poolNameHdr">🏍️ Pool</h1>
+        <p id="userEmailHdr"></p>
+      </div>
     </div>
-    <div class="save-pill" id="savePill">✓ Guardado</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+      <div class="pill" id="savePill">✓ Sync</div>
+      <img id="userAvatar" class="user-av" src="" alt="" style="display:none" onclick="doSignOut()">
+    </div>
   </div>
-  <div class="kpi-section"><div class="kpi-grid" id="kpiGrid"></div></div>
+  <div class="kpi-sec"><div class="kpi-grid" id="kpiGrid"></div></div>
   <div class="nav">
     <button class="nav-btn active" data-tab="resumen" onclick="sw('resumen')">Resumen</button>
     <button class="nav-btn" data-tab="motos" onclick="sw('motos')">Motos</button>
     <button class="nav-btn" data-tab="socios" onclick="sw('socios')">Socios</button>
+    <button class="nav-btn" data-tab="rendimiento" onclick="sw('rendimiento')">Rendimiento</button>
+    <button class="nav-btn" data-tab="transferencias" onclick="sw('transferencias')">Transferencias</button>
     <button class="nav-btn" data-tab="historial" onclick="sw('historial')">Historial</button>
     <button class="nav-btn" data-tab="proyeccion" onclick="sw('proyeccion')">Proyección</button>
     <button class="nav-btn" data-tab="simulador" onclick="sw('simulador')">Simulador</button>
@@ -171,297 +223,361 @@ window._firebaseReady = true;
 </div>
 </div>
 
-<!-- MODAL: Agregar moto -->
-<div class="overlay" id="overlayAddMoto">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3>➕ Agregar moto</h3>
-    <div class="fg"><label>Nombre</label><input type="text" id="mNom" placeholder="Ej: 2023 Honda CBR 600RR"></div>
-    <div class="fg"><label>Fecha de compra</label><input type="date" id="mFecha"></div>
-    <div class="fg"><label>Costo (USD)</label><input type="number" id="mCosto" placeholder="0" min="0"></div>
-    <div class="fg"><label>Aportes extra por socio (si alguno pone más)</label><div id="mExtras"></div></div>
-    <div class="sheet-actions">
-      <button class="btn btn-outline" onclick="closeOverlay('overlayAddMoto')">Cancelar</button>
-      <button class="btn btn-primary" onclick="doAddMoto()">Agregar</button>
-    </div>
-  </div>
-</div>
+<!-- MODALES -->
+<div class="ov" id="ovAddMoto"><div class="sh"><div class="sh-h"></div>
+  <h3>➕ Agregar moto</h3>
+  <div class="fg"><label>Nombre</label><input type="text" id="mNom" placeholder="Ej: 2023 Honda CBR 600RR"></div>
+  <div class="fg"><label>Fecha de compra</label><input type="date" id="mFecha"></div>
+  <div class="fg"><label>Costo (USD)</label><input type="number" id="mCosto" placeholder="0" min="0"></div>
+  <div class="fg"><label>¿Quiénes participan?</label><div id="mPartic"></div></div>
+  <div class="fg"><label>Aportes extra por socio</label><div id="mExtras"></div></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovAddMoto')">Cancelar</button><button class="btn btn-p" onclick="doAddMoto()">Agregar</button></div>
+</div></div>
 
-<!-- MODAL: Editar moto -->
-<div class="overlay" id="overlayEditMoto">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3>✏️ Editar moto</h3>
-    <div class="fg"><label>Nombre</label><input type="text" id="eNom"></div>
-    <div class="fg"><label>Fecha de compra</label><input type="date" id="eFecha"></div>
-    <div class="fg"><label>Costo de compra (USD)</label><input type="number" id="eCosto" min="0"></div>
-    <div class="fg"><label>Aportes extra por socio</label><div id="eExtras"></div></div>
-    <div class="sheet-actions">
-      <button class="btn btn-outline" onclick="closeOverlay('overlayEditMoto')">Cancelar</button>
-      <button class="btn btn-primary" onclick="doEditMoto()">Guardar</button>
-    </div>
-  </div>
-</div>
+<div class="ov" id="ovEditMoto"><div class="sh"><div class="sh-h"></div>
+  <h3>✏️ Editar moto</h3>
+  <div class="fg"><label>Nombre</label><input type="text" id="eNom"></div>
+  <div class="fg"><label>Fecha de compra</label><input type="date" id="eFecha"></div>
+  <div class="fg"><label>Costo (USD)</label><input type="number" id="eCosto" min="0"></div>
+  <div class="fg"><label>¿Quiénes participan?</label><div id="ePartic"></div></div>
+  <div class="fg"><label>Aportes extra por socio</label><div id="eExtras"></div></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovEditMoto')">Cancelar</button><button class="btn btn-p" onclick="doEditMoto()">Guardar</button></div>
+</div></div>
 
-<!-- MODAL: Venta -->
-<div class="overlay" id="overlaySell">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3>💰 Registrar venta</h3>
-    <div class="fg"><label>Fecha de venta</label><input type="date" id="sFecha"></div>
-    <div class="fg"><label>Precio de venta (USD)</label><input type="number" id="sPrecio" placeholder="0" min="0"></div>
-    <div class="fg"><label>% comisión concesionario</label><input type="number" id="sComm" value="10" min="0" max="100"></div>
-    <div class="sheet-actions">
-      <button class="btn btn-outline" onclick="closeOverlay('overlaySell')">Cancelar</button>
-      <button class="btn btn-primary" onclick="doSell()">Confirmar venta</button>
-    </div>
-  </div>
-</div>
+<div class="ov" id="ovSell"><div class="sh"><div class="sh-h"></div>
+  <h3>💰 Registrar venta</h3>
+  <div class="fg"><label>Fecha de venta</label><input type="date" id="sFecha"></div>
+  <div class="fg"><label>Precio de venta (USD)</label><input type="number" id="sPrecio" placeholder="0" min="0"></div>
+  <div class="fg"><label>% comisión concesionario</label><input type="number" id="sComm" value="10" min="0" max="100"></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovSell')">Cancelar</button><button class="btn btn-p" onclick="doSell()">Confirmar</button></div>
+</div></div>
 
-<!-- MODAL: Costo extra -->
-<div class="overlay" id="overlayAddCost">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3>🔧 Agregar costo</h3>
-    <div class="fg"><label>Descripción</label><input type="text" id="cDesc" placeholder="Ej: Service, cadena, frenos..."></div>
-    <div class="fg"><label>Monto (USD)</label><input type="number" id="cAmt" placeholder="0" min="0"></div>
-    <div class="fg"><label>Fecha</label><input type="date" id="cDate"></div>
-    <div class="fg"><label>¿Quién lo paga? (cuenta como aporte extra)</label>
-      <select id="cPayer">
-        <option value="">-- Se reparte proporcionalmente --</option>
-      </select>
-    </div>
-    <div class="sheet-actions">
-      <button class="btn btn-outline" onclick="closeOverlay('overlayAddCost')">Cancelar</button>
-      <button class="btn btn-primary" onclick="doAddCost()">Guardar</button>
-    </div>
-  </div>
-</div>
+<div class="ov" id="ovAddCost"><div class="sh"><div class="sh-h"></div>
+  <h3>🔧 Agregar costo</h3>
+  <div class="fg"><label>Descripción</label><input type="text" id="cDesc" placeholder="Ej: Service, cadena, frenos..."></div>
+  <div class="fg"><label>Monto (USD)</label><input type="number" id="cAmt" placeholder="0" min="0"></div>
+  <div class="fg"><label>Fecha</label><input type="date" id="cDate"></div>
+  <div class="fg"><label>¿Quién lo paga?</label><select id="cPayer"><option value="">-- Se reparte proporcionalmente --</option></select></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovAddCost')">Cancelar</button><button class="btn btn-p" onclick="doAddCost()">Guardar</button></div>
+</div></div>
+
+<div class="ov" id="ovTransfer"><div class="sh"><div class="sh-h"></div>
+  <h3 id="transferTitle">💸 Transferencia</h3>
+  <div id="transferBody"></div>
+</div></div>
+
+<div class="ov" id="ovNewPool"><div class="sh"><div class="sh-h"></div>
+  <h3>🏊 Crear nuevo pool</h3>
+  <div class="fg"><label>Nombre del pool</label><input type="text" id="newPoolName" placeholder="Ej: Motos 2026, Autos, etc."></div>
+  <div class="fg"><label>Descripción (opcional)</label><input type="text" id="newPoolDesc" placeholder="Ej: Pool de inversión en motos"></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovNewPool')">Cancelar</button><button class="btn btn-p" onclick="doCreatePool()">Crear pool</button></div>
+</div></div>
 
 <script>
-const PIN = '1234';
-const SK = 'moto_inv_v5'; // fallback local
+// ── STATE ─────────────────────────────────────────────────
+let currentUser = null;
+let currentPoolId = null;
+let currentPool = null;
+let activeTab = 'resumen';
+let unsubPool = null;
+let charts = {};
+let saveTimer = null;
+let editMotoId = null;
+let sellId = null;
+let costMotoId = null;
 
-const DEF = {
-  investors:[
-    {id:'octa',name:'Octavio',initials:'OC',color:'#534AB7',cap:4600},
-    {id:'nacho',name:'Nacho',initials:'NA',color:'#0F6E56',cap:2500},
-    {id:'anita',name:'Anita',initials:'AN',color:'#993C1D',cap:2500}
-  ],
-  motos:[
-    {id:'m1',name:'2016 Kawasaki Ninja ZX-6R',cost:5850,buyDate:'2026-03-19',
-     sold:true,saleDate:'2026-05-16',salePrice:8000,comm:10,netSale:7200,
-     extras:{octa:0,nacho:0,anita:0},extraCosts:[]},
-    {id:'m2',name:'2019 Harley Davidson 883 Iron',cost:3750,buyDate:'2026-03-19',
-     sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,
-     extras:{octa:0,nacho:0,anita:0},extraCosts:[]},
-    {id:'m3',name:'2026 Kawasaki Ninja ZX-6R',cost:9600,buyDate:'2026-06-01',
-     sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,
-     extras:{octa:2400,nacho:0,anita:0},extraCosts:[]}
-  ],
-  nextId:4
+// ── AUTH ──────────────────────────────────────────────────
+window._onAuthChange = async (user) => {
+  currentUser = user;
+  if (!user) {
+    showScreen('login');
+  } else {
+    document.getElementById('userEmailHdr').textContent = user.email;
+    if (user.photoURL) {
+      document.getElementById('userAvatar').src = user.photoURL;
+      document.getElementById('userAvatar').style.display = 'block';
+    }
+    showScreen('pools');
+    await loadPools();
+  }
 };
 
-let S=null, activeTab='resumen', sellId=null, editId=null, costId=null, chart=null, saveTimer=null;
-
-// ── PIN ──────────────────────────────────────────────────
-function checkPin(){
-  if(document.getElementById('pinInput').value===PIN){
-    document.getElementById('gateScreen').style.display='none';
-    document.getElementById('mainApp').style.display='block';
-    loadData();
-  } else {
-    document.getElementById('pinError').textContent='PIN incorrecto.';
-    document.getElementById('pinInput').value='';
+async function doSignIn() {
+  try {
+    document.getElementById('loginError').textContent = '';
+    await window._signIn();
+  } catch(e) {
+    document.getElementById('loginError').textContent = 'Error al iniciar sesión. Intentá de nuevo.';
   }
 }
 
-// ── STORAGE ──────────────────────────────────────────────
-function migrateState(parsed){
-  if(!parsed) return JSON.parse(JSON.stringify(DEF));
-  parsed.motos.forEach(m=>{
-    if(!m.extras)m.extras={};
-    if(!m.extraCosts)m.extraCosts=[];
-    DEF.investors.forEach(i=>{if(m.extras[i.id]===undefined)m.extras[i.id]=0;});
-    m.extraCosts.forEach(c=>{if(!c.payer)c.payer='';});
-  });
-  return parsed;
+function doSignOut() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  if (unsubPool) { unsubPool(); unsubPool = null; }
+  currentPoolId = null; currentPool = null;
+  window._signOut();
 }
 
-function loadData(){
+function showScreen(s) {
+  document.getElementById('loginScreen').style.display = s==='login' ? 'flex' : 'none';
+  document.getElementById('poolSelector').style.display = s==='pools' ? 'block' : 'none';
+  document.getElementById('mainApp').style.display = s==='app' ? 'block' : 'none';
+}
+
+// ── POOLS ─────────────────────────────────────────────────
+async function loadPools() {
+  if (!currentUser) return;
   pill('Cargando...','saving');
-  // Wait for Firebase module to be ready
-  const tryLoad = () => {
-    if(window._firebaseReady && window._docRef && window._onSnapshot){
-      // Listen for real-time updates from Firestore
-      window._onSnapshot(window._docRef, (snap) => {
-        if(snap.exists()){
-          S = migrateState(snap.data());
-        } else {
-          // First time: save default state to Firestore
-          S = JSON.parse(JSON.stringify(DEF));
-          window._setDoc(window._docRef, S);
-        }
+  try {
+    // Get all pools where user is a member
+    const snap = await window._getDocs(
+      window._query(
+        window._col(window._db, 'pools'),
+        window._where('memberEmails', 'array-contains', currentUser.email)
+      )
+    );
+    const pools = [];
+    snap.forEach(d => pools.push({id: d.id, ...d.data()}));
+
+    // Also check if user is owner
+    const ownSnap = await window._getDocs(
+      window._query(
+        window._col(window._db, 'pools'),
+        window._where('ownerEmail', '==', currentUser.email)
+      )
+    );
+    ownSnap.forEach(d => { if(!pools.find(p=>p.id===d.id)) pools.push({id:d.id,...d.data()}); });
+
+    renderPoolList(pools);
+    // Show create button only for owner or anyone
+    document.getElementById('btnNewPool').style.display = 'flex';
+  } catch(e) {
+    console.error(e);
+    pill('Error','error');
+  }
+}
+
+function renderPoolList(pools) {
+  const el = document.getElementById('poolList');
+  if (!pools.length) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:12px">🏊</div>
+      <p style="font-size:14px;">No tenés pools todavía.</p>
+      <p style="font-size:13px;margin-top:6px;">Creá uno para empezar.</p>
+    </div>`;
+    return;
+  }
+  el.innerHTML = pools.map(p => {
+    const members = (p.members||[]).length;
+    const motos = (p.motos||[]).length;
+    return `<div class="pool-card" onclick="selectPool('${p.id}')">
+      <h3>${p.name||'Sin nombre'}</h3>
+      <p>${p.desc||''}</p>
+      <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:var(--muted)">
+        <span>👥 ${members} socio${members!==1?'s':''}</span>
+        <span>🏍️ ${motos} moto${motos!==1?'s':''}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selectPool(poolId) {
+  currentPoolId = poolId;
+  if (unsubPool) { unsubPool(); unsubPool = null; }
+  pill('Cargando...','saving');
+  showScreen('app');
+  // Real-time listener
+  unsubPool = window._onSnap(
+    window._doc(window._db, 'pools', poolId),
+    (snap) => {
+      if (snap.exists()) {
+        currentPool = migrate(snap.data());
+        document.getElementById('poolNameHdr').textContent = '🏍️ ' + (currentPool.name||'Pool');
         renderAll();
-        pill('✓ Sincronizado','');
-      }, (err) => {
-        console.warn('Firestore error, using localStorage:', err);
-        loadFromLocal();
-      });
-    } else {
-      setTimeout(tryLoad, 100);
-    }
+        pill('✓ Sync','');
+      }
+    },
+    (err) => { console.error(err); pill('Error','error'); }
+  );
+}
+
+function backToPools() {
+  if (unsubPool) { unsubPool(); unsubPool = null; }
+  currentPoolId = null; currentPool = null;
+  showScreen('pools');
+  loadPools();
+}
+
+function openNewPool() { openOv('ovNewPool'); }
+
+async function doCreatePool() {
+  const name = document.getElementById('newPoolName').value.trim();
+  const desc = document.getElementById('newPoolDesc').value.trim();
+  if (!name) { alert('Ingresá un nombre para el pool.'); return; }
+  const poolData = {
+    name, desc,
+    ownerEmail: currentUser.email,
+    memberEmails: [currentUser.email],
+    members: [{
+      id: currentUser.uid,
+      name: currentUser.displayName||currentUser.email.split('@')[0],
+      email: currentUser.email,
+      initials: (currentUser.displayName||currentUser.email).slice(0,2).toUpperCase(),
+      color: '#534AB7',
+      cap: 0
+    }],
+    motos: [],
+    movimientos: [],
+    nextId: 1
   };
-  tryLoad();
+  try {
+    const ref = window._doc(window._col(window._db,'pools'));
+    await window._set(ref, poolData);
+    closeOv('ovNewPool');
+    loadPools();
+  } catch(e) { alert('Error al crear el pool.'); }
 }
 
-function loadFromLocal(){
-  try{
-    const raw=localStorage.getItem(SK);
-    S = raw ? migrateState(JSON.parse(raw)) : JSON.parse(JSON.stringify(DEF));
-  } catch(e){ S=JSON.parse(JSON.stringify(DEF)); }
-  renderAll();
-  pill('✓ Guardado (local)','');
+// ── MIGRATE & SAVE ────────────────────────────────────────
+function migrate(d) {
+  if (!d) return {};
+  if (!d.members) d.members = [];
+  if (!d.motos) d.motos = [];
+  if (!d.movimientos) d.movimientos = [];
+  if (!d.nextId) d.nextId = 1;
+  d.motos.forEach(m => {
+    if (!m.extras) m.extras = {};
+    if (!m.extraCosts) m.extraCosts = [];
+    if (!m.participantes) m.participantes = d.members.map(i=>i.id);
+    d.members.forEach(i => { if (m.extras[i.id]===undefined) m.extras[i.id]=0; });
+    m.extraCosts.forEach(c => { if (!c.payer) c.payer=''; });
+  });
+  return d;
 }
 
-function schedSave(){
+function schedSave() {
   pill('Guardando...','saving');
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(async ()=>{
-    try{
-      if(window._firebaseReady && window._setDoc && window._docRef){
-        await window._setDoc(window._docRef, JSON.parse(JSON.stringify(S)));
-        pill('✓ Sincronizado','');
-      } else {
-        localStorage.setItem(SK, JSON.stringify(S));
-        pill('✓ Guardado (local)','');
-      }
-    } catch(e){
-      console.warn('Save error:', e);
-      try{ localStorage.setItem(SK, JSON.stringify(S)); } catch(e2){}
-      pill('Error al guardar','error');
-    }
-  },800);
+  saveTimer = setTimeout(async () => {
+    try {
+      await window._set(window._doc(window._db,'pools',currentPoolId), JSON.parse(JSON.stringify(currentPool)));
+      pill('✓ Sync','');
+    } catch(e) { pill('Error','error'); }
+  }, 800);
 }
 
-function pill(t,c){ const e=document.getElementById('savePill'); e.textContent=t; e.className='save-pill '+c; }
+// ── HELPERS ───────────────────────────────────────────────
+const tod = () => new Date().toISOString().split('T')[0];
+const dys = (a,b) => Math.max(0, Math.round((new Date(b)-new Date(a))/86400000));
+const fmt = n => '$'+Math.round(n).toLocaleString('es-AR');
+const pct = n => (n*100).toFixed(1)+'%';
+const fD = d => { if(!d)return'-'; const[y,m,dd]=d.split('-'); return`${+dd} ${'ene feb mar abr may jun jul ago sep oct nov dic'.split(' ')[+m-1]} ${y}`; };
+const hld = d => { if(d<1)return'0d'; if(d<30)return`${d}d`; const mo=Math.floor(d/30),r=d%30; return r?`${mo}m ${r}d`:`${mo}m`; };
+const getMonth = d => d?d.slice(0,7):'';
+const getYear = d => d?d.slice(0,4):'';
 
-// ── HELPERS ──────────────────────────────────────────────
-const tod=()=>new Date().toISOString().split('T')[0];
-const dys=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
-const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR');
-const pct=n=>(n*100).toFixed(1)+'%';
-const fD=d=>{if(!d)return'-';const[y,m,dd]=d.split('-');return`${+dd} ${'ene feb mar abr may jun jul ago sep oct nov dic'.split(' ')[+m-1]} ${y}`;};
-const hld=d=>{if(d<1)return'0d';if(d<30)return`${d}d`;const mo=Math.floor(d/30),r=d%30;return r?`${mo}m ${r}d`:`${mo}m`;};
-
-// ── MATH ─────────────────────────────────────────────────
-const totalInitCap = () => S.investors.reduce((a,i)=>a+i.cap,0);
-const invBaseSh    = inv => inv.cap / totalInitCap();
-
-// Costos de reparación/service de una moto
-const repairTotal  = m => (m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
-
-// Costo total real de la moto (precio compra + reparaciones)
-const effCost      = m => m.cost + repairTotal(m);
-
-// Aportes extra al momento de la compra (quien puso más del proporcional)
+// ── MATH ──────────────────────────────────────────────────
+const P = () => currentPool;
+const members = () => (P().members||[]).filter(m=>!m.retired||(m.retiredAt&&dys(m.retiredAt,tod())<90));
+const mPartic = m => (m.participantes||P().members.map(i=>i.id));
+const repairTotal = m => (m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
+const effCost = m => m.cost + repairTotal(m);
 const buyExtrasTotal = m => Object.values(m.extras||{}).reduce((a,b)=>a+b,0);
 
-// Cuánto puso un socio en una moto específica:
-// - parte proporcional del costo de compra (descontando aportes extra de otros)
-// - más su aporte extra de compra
-// - más los costos de reparación que él pagó
+const motoBaseSh = (m, inv) => {
+  const parts = mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
+  const tot = parts.reduce((a,i)=>a+i.cap,0);
+  return tot>0 ? (inv.cap/tot) : (1/Math.max(1,parts.length));
+};
+
 const motoInvCost = (m, inv) => {
+  if (!mPartic(m).includes(inv.id)) return 0;
   const basePool = m.cost - buyExtrasTotal(m);
-  const propPart = Math.max(0, basePool * invBaseSh(inv));
-  const extraBuy = m.extras[inv.id] || 0;
-  const repairs  = (m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+  const propPart = Math.max(0, basePool * motoBaseSh(m, inv));
+  const extraBuy = m.extras[inv.id]||0;
+  const repairs = (m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
   return propPart + extraBuy + repairs;
 };
 
-// Ganancia de una moto vendida = neto recibido - costo total (compra + reparaciones)
 const motoGain = m => m.sold ? m.netSale - effCost(m) : null;
 
-// Ganancia de un socio en una moto vendida, proporcional a su participación
 const invGainMoto = (m, inv) => {
-  if(!m.sold) return 0;
-  const g = motoGain(m);
-  const ec = effCost(m);
-  const p = ec>0 ? motoInvCost(m,inv)/ec : invBaseSh(inv);
-  return g * p;
+  if (!m.sold||!mPartic(m).includes(inv.id)) return 0;
+  const g = motoGain(m), totalInvParts = mPartic(m).reduce((a,id)=>{const i=P().members.find(x=>x.id===id);return a+(i?motoInvCost(m,i):0);},0);
+  return g*(totalInvParts>0?motoInvCost(m,inv)/totalInvParts:0);
 };
 
-// Total invertido por un socio (cap inicial + aportes extra compra + reparaciones pagadas)
-const invTotalInvested = inv => {
-  return inv.cap + S.motos.reduce((a,m)=>{
-    const extraBuy = m.extras[inv.id]||0;
-    const repairs  = (m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((s,c)=>s+c.amount,0);
-    return a + extraBuy + repairs;
-  },0);
-};
+const invMovs = (inv, tipo) => (P().movimientos||[]).filter(mv=>mv.invId===inv.id&&(!tipo||mv.tipo===tipo));
+const invTotalRetirado = inv => invMovs(inv,'retiro').reduce((a,mv)=>a+mv.amt,0);
+const invTotalAportado = inv => invMovs(inv,'aporte').reduce((a,mv)=>a+mv.amt,0);
+const invTotalExtras = inv => (P().motos||[]).reduce((a,m)=>{
+  const eb=m.extras[inv.id]||0;
+  const rep=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((s,c)=>s+c.amount,0);
+  return a+eb+rep;
+},0);
+const invTotalInvested = inv => inv.cap + invTotalAportado(inv) + invTotalExtras(inv);
+const invTotalGains = inv => (P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+invGainMoto(m,inv),0);
+const invTotCap = inv => invTotalInvested(inv) + invTotalGains(inv) - invTotalRetirado(inv);
+const totCap = () => members().reduce((a,inv)=>a+invTotCap(inv),0);
 
-// Ganancias realizadas de un socio
-const invTotalGains = inv => S.motos.filter(m=>m.sold).reduce((a,m)=>a+invGainMoto(m,inv),0);
+// ── RENDER ────────────────────────────────────────────────
+function renderAll() { renderKPIs(); renderTab(); }
 
-// Capital actual de un socio
-const invTotCap = inv => invTotalInvested(inv) + invTotalGains(inv);
+function pill(t,c) { const e=document.getElementById('savePill'); if(e){e.textContent=t;e.className='pill '+c;} }
 
-// Capital total del pool
-const totCap = () => S.investors.reduce((a,inv)=>a+invTotCap(inv),0);
-
-// ── RENDER ───────────────────────────────────────────────
-function renderAll(){ renderKPIs(); renderTab(); }
-
-function renderKPIs(){
+function renderKPIs() {
   const cap=totCap();
-  const totalInv=S.investors.reduce((a,inv)=>a+invTotalInvested(inv),0);
-  const gain=S.motos.filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
+  const totalInv=members().reduce((a,inv)=>a+invTotalInvested(inv),0);
+  const gain=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
   const roi=totalInv>0?gain/totalInv:0;
   const dA=dys('2026-03-19',tod());
   const mr=dA>0?roi/(dA/30):0;
-  const sold=S.motos.filter(m=>m.sold).length, act=S.motos.filter(m=>!m.sold).length;
-  // ROI realizado: solo capital que participó en motos vendidas
-  const capRotado = S.motos.filter(m=>m.sold).reduce((a,m)=>a+effCost(m),0);
-  const roiRealizado = capRotado>0 ? gain/capRotado : 0;
-  const mrRealizado = dA>0 ? roiRealizado/(dA/30) : 0;
-
+  const capR=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+effCost(m),0);
+  const roiR=capR>0?gain/capR:0;
+  const mrR=dA>0?roiR/(dA/30):0;
+  const sold=(P().motos||[]).filter(m=>m.sold).length;
+  const act=(P().motos||[]).filter(m=>!m.sold).length;
   document.getElementById('kpiGrid').innerHTML=`
-    <div class="kpi"><div class="kpi-label">Capital total</div><div class="kpi-value">${fmt(cap)}</div><div class="kpi-sub">Invertido ${fmt(totalInv)}</div></div>
-    <div class="kpi"><div class="kpi-label">Ganancia realizada</div><div class="kpi-value up">${fmt(gain)}</div><div class="kpi-sub">${sold} venta${sold!==1?'s':''}</div></div>
-    <div class="kpi"><div class="kpi-label">ROI realizado</div><div class="kpi-value up">${pct(roiRealizado)}</div><div class="kpi-sub">${pct(mrRealizado)}/mes · ventas cerradas</div></div>
-    <div class="kpi"><div class="kpi-label">ROI total</div><div class="kpi-value">${pct(roi)}</div><div class="kpi-sub">${pct(mr)}/mes · todo el capital</div></div>`;
+    <div class="kpi"><div class="kpi-lbl">Capital total</div><div class="kpi-val">${fmt(cap)}</div><div class="kpi-sub">Invertido ${fmt(totalInv)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Ganancia realizada</div><div class="kpi-val up">${fmt(gain)}</div><div class="kpi-sub">${sold} venta${sold!==1?'s':''}</div></div>
+    <div class="kpi"><div class="kpi-lbl">ROI realizado</div><div class="kpi-val up">${pct(roiR)}</div><div class="kpi-sub">${pct(mrR)}/mes · ventas cerradas</div></div>
+    <div class="kpi"><div class="kpi-lbl">ROI total</div><div class="kpi-val">${pct(roi)}</div><div class="kpi-sub">${pct(mr)}/mes · ${act} en cartera</div></div>`;
 }
 
-function sw(t){
+function sw(t) {
   activeTab=t;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   renderTab();
 }
 
-function renderTab(){
+function renderTab() {
   const el=document.getElementById('tabContent');
   if(!el)return;
-  if(activeTab==='resumen')      el.innerHTML=rResumen();
-  else if(activeTab==='motos')   el.innerHTML=rMotos();
-  else if(activeTab==='socios')  el.innerHTML=rSocios();
+  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});
+  charts={};
+  if(activeTab==='resumen') el.innerHTML=rResumen();
+  else if(activeTab==='motos') el.innerHTML=rMotos();
+  else if(activeTab==='socios') el.innerHTML=rSocios();
+  else if(activeTab==='rendimiento') el.innerHTML=rRendimiento();
+  else if(activeTab==='transferencias') el.innerHTML=rTransferencias();
   else if(activeTab==='historial') el.innerHTML=rHistorial();
-  else if(activeTab==='proyeccion'){el.innerHTML=rProyeccion(); bindProj();}
+  else if(activeTab==='proyeccion'){el.innerHTML=rProyeccion();bindProj();}
   else if(activeTab==='simulador') el.innerHTML=rSimulador();
   if(activeTab==='resumen') setTimeout(rEvoChart,100);
 }
 
-// ── RESUMEN ──────────────────────────────────────────────
-function rResumen(){
+// ── RESUMEN ───────────────────────────────────────────────
+function rResumen() {
   const cap=totCap();
-  const rows=S.investors.map(inv=>{
-    const c=invTotCap(inv), inv2=invTotalInvested(inv), g=invTotalGains(inv);
-    const r=inv2>0?g/inv2:0, sp=cap>0?c/cap:0;
+  const rows=members().map(inv=>{
+    const c=invTotCap(inv),inv2=invTotalInvested(inv),g=invTotalGains(inv),ret=invTotalRetirado(inv);
+    const r=inv2>0?g/inv2:0,sp=cap>0?c/cap:0;
     return`<div class="inv-row">
-      <div class="avatar" style="width:36px;height:36px;font-size:12px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
+      <div class="av" style="width:36px;height:36px;font-size:12px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600">${inv.name}</div>
-        <div style="font-size:11px;color:var(--muted)">Invertido ${fmt(inv2)} → <span style="color:var(--green)">${fmt(c)}</span> (+${pct(r)})</div>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${(sp*100).toFixed(1)}%;background:${inv.color}"></div></div>
+        <div style="font-size:11px;color:var(--muted)">Aporte ${fmt(inv2)} · <span style="color:var(--green)">Capital ${fmt(c)}</span></div>
+        <div class="bw"><div class="bf" style="width:${(sp*100).toFixed(1)}%;background:${inv.color}"></div></div>
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:14px;font-weight:700">${fmt(c)}</div>
@@ -470,53 +586,40 @@ function rResumen(){
     </div>`;
   }).join('');
   return`
-    <div class="sec-lbl">Capital por socio</div>
+    <div class="slbl">Capital por socio</div>
     <div class="card" style="padding:12px 14px;margin-bottom:16px">${rows}</div>
-    <div class="sec-lbl">Evolución del capital</div>
-    <div class="legend" id="chartLegend"></div>
-    <div class="chart-wrap"><canvas id="evoChart"></canvas></div>`;
+    <div class="slbl">Evolución del capital</div>
+    <div class="leg" id="chartLegend"></div>
+    <div class="cw"><canvas id="evoChart"></canvas></div>`;
 }
 
-function rEvoChart(){
-  const ctx=document.getElementById('evoChart');
-  if(!ctx)return;
-  if(chart){chart.destroy();chart=null;}
+function rEvoChart() {
+  const ctx=document.getElementById('evoChart'); if(!ctx)return;
+  if(charts.evo){charts.evo.destroy();}
   const labels=['Inicio'];
-  const ds=S.investors.map(inv=>({
-    label:inv.name,data:[inv.cap],
-    borderColor:inv.color,backgroundColor:inv.color+'18',
-    tension:.4,fill:false,pointRadius:4,pointBackgroundColor:inv.color,borderWidth:2
-  }));
-  let run=S.investors.map(i=>i.cap);
-  S.motos.filter(m=>m.sold).sort((a,b)=>a.saleDate>b.saleDate?1:-1).forEach(m=>{
+  const ds=members().map(inv=>({label:inv.name,data:[inv.cap],borderColor:inv.color,backgroundColor:inv.color+'18',tension:.4,fill:false,pointRadius:4,pointBackgroundColor:inv.color,borderWidth:2}));
+  let run=members().map(i=>i.cap);
+  (P().motos||[]).filter(m=>m.sold).sort((a,b)=>a.saleDate>b.saleDate?1:-1).forEach(m=>{
     labels.push(fD(m.saleDate));
-    S.investors.forEach((inv,i)=>{run[i]+=invGainMoto(m,inv);ds[i].data.push(Math.round(run[i]));});
+    members().forEach((inv,i)=>{run[i]+=invGainMoto(m,inv);ds[i].data.push(Math.round(run[i]));});
   });
   const leg=document.getElementById('chartLegend');
-  if(leg) leg.innerHTML=S.investors.map(inv=>`<span class="leg-item"><span class="leg-dot" style="background:${inv.color}"></span>${inv.name}</span>`).join('');
-  chart=new Chart(ctx,{type:'line',data:{labels,datasets:ds},options:{
-    responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:false}},
-    scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k'},grid:{color:'rgba(0,0,0,.05)'}},
-            x:{grid:{display:false},ticks:{font:{size:11}}}}
-  }});
+  if(leg) leg.innerHTML=members().map(inv=>`<span class="li"><span class="ld" style="background:${inv.color}"></span>${inv.name}</span>`).join('');
+  charts.evo=new Chart(ctx,{type:'line',data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k'},grid:{color:'rgba(0,0,0,.05)'}},x:{grid:{display:false},ticks:{font:{size:11}}}}}});
 }
 
-// ── MOTOS ────────────────────────────────────────────────
-function rMotos(){
-  const sold=S.motos.filter(m=>m.sold), act=S.motos.filter(m=>!m.sold), td=tod();
+// ── MOTOS ─────────────────────────────────────────────────
+function rMotos() {
+  const sold=(P().motos||[]).filter(m=>m.sold), act=(P().motos||[]).filter(m=>!m.sold), td=tod();
   let html='';
-
   if(sold.length){
-    html+=`<div class="sec-lbl">Vendidas</div>`;
+    html+=`<div class="slbl">Vendidas</div>`;
     sold.forEach(m=>{
-      const rt=repairTotal(m), g=motoGain(m), ec=effCost(m), gp=g/ec;
-      const d=dys(m.buyDate,m.saleDate), gpd=g/d, mroi=(gpd*30)/ec;
-      const repItems=(m.extraCosts||[]).map(c=>{
-        const pName=c.payer?S.investors.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';
-        return`<div class="extra-item"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small> · <small>${pName}</small></span><span class="crn">-${fmt(c.amount)}</span></div>`;
-      }).join('');
-      const invP=S.investors.map(inv=>`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="crg">+${fmt(invGainMoto(m,inv))}</span></div>`).join('');
+      const rt=repairTotal(m),g=motoGain(m),ec=effCost(m),gp=g/ec;
+      const d=dys(m.buyDate,m.saleDate),gpd=g/d,mroi=(gpd*30)/ec;
+      const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
+      const repItems=(m.extraCosts||[]).map(c=>{const pName=c.payer?P().members.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';return`<div class="ei"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small> · <small>${pName}</small></span><span class="crn">-${fmt(c.amount)}</span></div>`;}).join('');
+      const invP=parts.map(inv=>`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="crg">+${fmt(invGainMoto(m,inv))}</span></div>`).join('');
       html+=`<div class="card">
         <div class="moto-head"><div><div class="moto-name">${m.name}</div><div class="moto-date">${fD(m.buyDate)} → ${fD(m.saleDate)}</div></div><span class="badge b-sold">Vendida</span></div>
         <div class="cr" style="border-top:none"><span class="crl">Costo compra</span><span class="crv">${fmt(m.cost)}</span></div>
@@ -525,196 +628,444 @@ function rMotos(){
         <div class="cr"><span class="crl">Comisión ${m.comm}%</span><span class="crn">-${fmt(m.salePrice*m.comm/100)}</span></div>
         <div class="cr"><span class="crl">Neto recibido</span><span class="crv">${fmt(m.netSale)}</span></div>
         <div class="cr"><span class="crl">Ganancia neta</span><span class="crg">${fmt(g)} · ${pct(gp)}</span></div>
-        <div class="time-strip">
-          <div class="tc"><div class="tv">${hld(d)}</div><div class="tl">En cartera</div></div>
-          <div class="tc"><div class="tv up">${fmt(gpd)}/d</div><div class="tl">Gan. diaria</div></div>
-          <div class="tc"><div class="tv up">${pct(mroi)}/m</div><div class="tl">ROI mensual</div></div>
-        </div>
-        ${repItems?`<div style="font-size:11px;color:var(--muted);margin:6px 0 2px">Reparaciones / costos:</div>${repItems}`:''}
+        <div class="ts"><div class="tc"><div class="tv">${hld(d)}</div><div class="tl-s">En cartera</div></div><div class="tc"><div class="tv up">${fmt(gpd)}/d</div><div class="tl-s">Gan. diaria</div></div><div class="tc"><div class="tv up">${pct(mroi)}/m</div><div class="tl-s">ROI mensual</div></div></div>
+        ${repItems?`<div style="font-size:11px;color:var(--muted);margin:6px 0 2px">Costos adicionales:</div>${repItems}`:''}
         <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio:</div>${invP}
       </div>`;
     });
   }
-
-  html+=`<div class="sec-lbl" style="margin-top:${sold.length?'8px':'0'}">En cartera</div>`;
+  html+=`<div class="slbl${sold.length?' mt':''}">En cartera</div>`;
   if(act.length){
     act.forEach(m=>{
-      const rt=repairTotal(m), ec=effCost(m), d=dys(m.buyDate,td);
-      const repItems=(m.extraCosts||[]).map((c,i)=>{
-        const pName=c.payer?S.investors.find(x=>x.id===c.payer)?.name||c.payer:'Proporcional';
-        return`<div class="extra-item">
-          <span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small> · <small>${pName}</small></span>
-          <div style="display:flex;align-items:center;gap:8px"><span class="crn">-${fmt(c.amount)}</span><button class="btn-sm btn-danger-sm" onclick="delCost('${m.id}',${i})">✕</button></div>
-        </div>`;
-      }).join('');
-      const invP=S.investors.map(inv=>{
-        const ic=motoInvCost(m,inv), ip=ec>0?ic/ec:0;
-        return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="crv">${fmt(ic)} <small style="font-weight:400;color:var(--muted)">(${pct(ip)})</small></span></div>`;
-      }).join('');
+      const rt=repairTotal(m),ec=effCost(m),d=dys(m.buyDate,td);
+      const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
+      const repItems=(m.extraCosts||[]).map((c,i)=>{const pName=c.payer?P().members.find(x=>x.id===c.payer)?.name||c.payer:'Proporcional';return`<div class="ei"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small> · <small>${pName}</small></span><div style="display:flex;align-items:center;gap:8px"><span class="crn">-${fmt(c.amount)}</span><button class="btn-sm btn-ds" onclick="delCost('${m.id}',${i})">✕</button></div></div>`;}).join('');
+      const invP=parts.map(inv=>{const ic=motoInvCost(m,inv),ip=ec>0?ic/ec:0;return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="crv">${fmt(ic)} <small style="font-weight:400;color:var(--muted)">(${pct(ip)})</small></span></div>`;}).join('');
       html+=`<div class="card">
         <div class="moto-head"><div><div class="moto-name">${m.name}</div><div class="moto-date">Comprada ${fD(m.buyDate)} · ${hld(d)} en cartera</div></div><span class="badge b-active">Activa</span></div>
         <div class="cr" style="border-top:none"><span class="crl">Costo compra</span><span class="crv">${fmt(m.cost)}</span></div>
         ${rt>0?`<div class="cr"><span class="crl">Reparaciones</span><span class="crn">+${fmt(rt)}</span></div><div class="cr"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>`:''}
-        ${repItems?`<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Reparaciones / costos:</div>${repItems}`:''}
-        <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Participación por socio:</div>${invP}
+        ${repItems?`<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Costos adicionales:</div>${repItems}`:''}
+        <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Participantes:</div>${invP}
         <div class="btn-row">
-          <button class="btn btn-green" style="flex:1" onclick="openSell('${m.id}')">💰 Registrar venta</button>
-          <button class="btn btn-outline" style="width:auto;padding:10px 14px" onclick="openEditMoto('${m.id}')">✏️</button>
+          <button class="btn btn-g" style="flex:1" onclick="openSell('${m.id}')">💰 Registrar venta</button>
+          <button class="btn btn-o" style="width:auto;padding:10px 14px" onclick="openEditMoto('${m.id}')">✏️</button>
         </div>
-        <button class="btn btn-amber" style="margin-top:8px" onclick="openAddCost('${m.id}')">🔧 Agregar costo (service / reparación)</button>
+        <button class="btn btn-a" style="margin-top:8px" onclick="openAddCost('${m.id}')">🔧 Agregar costo</button>
       </div>`;
     });
-  } else {
-    html+=`<p style="font-size:13px;color:var(--muted);margin-bottom:12px">No hay motos en cartera.</p>`;
-  }
-  html+=`<button class="btn btn-dashed" onclick="openAddMoto()">+ Agregar nueva moto</button>`;
+  } else { html+=`<p style="font-size:13px;color:var(--muted);margin-bottom:12px">No hay motos en cartera.</p>`; }
+  html+=`<button class="btn btn-d" onclick="openAddMoto()">+ Agregar nueva moto</button>`;
   return html;
 }
 
-// ── SOCIOS ───────────────────────────────────────────────
-function rSocios(){
-  const sold=S.motos.filter(m=>m.sold), dA=dys('2026-03-19',tod());
-  return S.investors.map(inv=>{
-    const c=invTotCap(inv), inv2=invTotalInvested(inv), g=invTotalGains(inv);
-    const r=inv2>0?g/inv2:0, mr=dA>0?r/(dA/30):0;
-    // ROI realizado: sobre el capital que el socio puso en motos ya vendidas
-    const capRotadoInv=S.motos.filter(m=>m.sold).reduce((a,m)=>a+motoInvCost(m,inv),0);
-    const rRealizado=capRotadoInv>0?g/capRotadoInv:0;
-    const extras=S.motos.reduce((a,m)=>{
-      const eb=m.extras[inv.id]||0;
-      const rep=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((s,c)=>s+c.amount,0);
-      return a+eb+rep;
-    },0);
-    const mRows=sold.map(m=>{
-      const d=dys(m.buyDate,m.saleDate);
-      return`<div class="cr"><span class="crl" style="font-size:12px">${m.name.split(' ').slice(0,3).join(' ')} <small>(${hld(d)})</small></span><span class="crg">+${fmt(invGainMoto(m,inv))}</span></div>`;
+// ── SOCIOS ────────────────────────────────────────────────
+function rSocios() {
+  return members().map(inv=>{
+    const c=invTotCap(inv),inv2=invTotalInvested(inv),g=invTotalGains(inv),ret=invTotalRetirado(inv);
+    const extras=invTotalExtras(inv),aportes=invTotalAportado(inv);
+    const sold=(P().motos||[]).filter(m=>m.sold&&mPartic(m).includes(inv.id));
+    const motoRowsHTML=sold.map(m=>{
+      const d=dys(m.buyDate,m.saleDate),invG=invGainMoto(m,inv),invC=motoInvCost(m,inv);
+      const mRoi=invC>0?invG/invC:0,mRoiM=d>0?mRoi/(d/30):0;
+      return`<div style="background:var(--bg);border-radius:var(--rs);padding:10px 12px;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px">${m.name.split(' ').slice(0,4).join(' ')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px">
+          <div><span style="color:var(--muted)">Invertido</span><div style="font-weight:600">${fmt(invC)}</div></div>
+          <div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${invG>=0?'var(--green)':'var(--red)'}">${invG>=0?'+':''}${fmt(invG)}</div></div>
+          <div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${mRoi>=0?'var(--green)':'var(--red)'}">${pct(mRoi)}</div></div>
+          <div><span style="color:var(--muted)">ROI/mes</span><div style="font-weight:600;color:${mRoiM>=0?'var(--green)':'var(--red)'}">${pct(mRoiM)}/m</div></div>
+          <div style="grid-column:span 2"><span style="color:var(--muted)">En cartera</span><div style="font-weight:600">${hld(d)}</div></div>
+        </div>
+      </div>`;
     }).join('');
+    const dA=dys('2026-03-19',tod());
+    const capR=sold.reduce((a,m)=>a+motoInvCost(m,inv),0);
+    const rReal=capR>0?g/capR:0,mrReal=dA>0?rReal/(dA/30):0;
+    const rTot=inv2>0?g/inv2:0,mrTot=dA>0?rTot/(dA/30):0;
+    const detailId=`detail_${inv.id}`;
     return`<div class="card">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div class="avatar" style="width:44px;height:44px;font-size:15px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
-        <div><div style="font-size:15px;font-weight:700">${inv.name}</div><div style="font-size:11px;color:var(--muted)">${pct(invBaseSh(inv))} del capital inicial</div></div>
+        <div class="av" style="width:44px;height:44px;font-size:15px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700">${inv.name}</div>
+          ${inv.retired?'<span style="font-size:11px;background:#FCEBEB;color:var(--red);padding:2px 8px;border-radius:20px">Retirado</span>':''}
+        </div>
       </div>
       <div class="cr" style="border-top:none"><span class="crl">Capital inicial</span><span class="crv">${fmt(inv.cap)}</span></div>
-      <div class="cr"><span class="crl">Aportes extra + reparaciones</span><span class="crv">${fmt(extras)}</span></div>
+      ${aportes>0?`<div class="cr"><span class="crl">Aportes adicionales</span><span class="crv">+${fmt(aportes)}</span></div>`:''}
+      ${extras>0?`<div class="cr"><span class="crl">Aportes en motos</span><span class="crv">+${fmt(extras)}</span></div>`:''}
       <div class="cr"><span class="crl">Total invertido</span><span class="crv">${fmt(inv2)}</span></div>
       <div class="cr"><span class="crl">Ganancias realizadas</span><span class="crg">+${fmt(g)}</span></div>
+      ${ret>0?`<div class="cr"><span class="crl">Total retirado</span><span class="crn">-${fmt(ret)}</span></div>`:''}
       <div class="cr"><span class="crl">Capital actual</span><span class="crv" style="font-size:16px">${fmt(c)}</span></div>
-      <div class="cr"><span class="crl">ROI realizado</span><span class="crg">${pct(rRealizado)}/mes · ventas cerradas</span></div>
-      <div class="cr"><span class="crl">ROI total</span><span class="crg">${pct(r)} · todo el capital</span></div>
-      ${sold.length?`<div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Por moto:</div>${mRows}`:''}
+      <div style="margin-top:10px">
+        <div class="section-toggle" id="tog_${inv.id}" onclick="toggleDetail('${inv.id}')">
+          <span style="font-size:12px;font-weight:600;color:var(--purple)">Ver ROI detallado y motos</span>
+          <span class="arrow">▼</span>
+        </div>
+        <div class="detail-panel" id="${detailId}">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:10px 0 6px">ROI</div>
+          <div class="cr" style="border-top:none"><span class="crl">ROI realizado</span><span class="crg">${pct(rReal)}</span></div>
+          <div class="cr"><span class="crl">ROI realizado mensual</span><span class="crg">${pct(mrReal)}/mes</span></div>
+          <div class="cr"><span class="crl">ROI total</span><span class="crg">${pct(rTot)}</span></div>
+          <div class="cr"><span class="crl">ROI total mensual</span><span class="crg">${pct(mrTot)}/mes</span></div>
+          ${sold.length?`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:12px 0 6px">Motos vendidas</div>
+          <div onclick="void(0)">${motoRowsHTML}</div>`:''}
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
 
-// ── HISTORIAL ────────────────────────────────────────────
-function rHistorial(){
-  const ev=[];
-  ev.push({date:'2026-03-19',label:'Inicio del negocio',sub:`Capital: ${fmt(totalInitCap())}`,color:'#534AB7',icon:'🚀'});
-  S.motos.forEach(m=>{
-    ev.push({date:m.buyDate,label:`Compra: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Costo ${fmt(m.cost)}`,color:'#185FA5',icon:'🛒'});
-    (m.extraCosts||[]).forEach(c=>{
-      const pName=c.payer?S.investors.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';
-      ev.push({date:c.date,label:`Gasto: ${c.desc}`,sub:`${m.name.split(' ').slice(0,2).join(' ')} · -${fmt(c.amount)} · ${pName}`,color:'#854F0B',icon:'🔧'});
-    });
-    if(m.sold) ev.push({date:m.saleDate,label:`Venta: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Ganancia ${fmt(motoGain(m))}`,color:'#3B6D11',icon:'💰'});
-  });
-  ev.sort((a,b)=>a.date>b.date?1:-1);
-  const items=ev.map((e,i)=>`
-    <div class="tl-item">
-      <div class="tl-dc"><div class="tl-dot" style="background:${e.color}"></div>${i<ev.length-1?'<div class="tl-line"></div>':''}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600">${e.icon} ${e.label}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">${fD(e.date)} · ${e.sub}</div>
-      </div>
-    </div>`).join('');
-  return`<div class="sec-lbl">Línea de tiempo</div><div class="card">${items}</div>`;
+function toggleDetail(id) {
+  const panel=document.getElementById(`detail_${id}`);
+  const tog=document.getElementById(`tog_${id}`);
+  panel.classList.toggle('open');
+  tog.classList.toggle('open');
 }
 
-// ── PROYECCIÓN ───────────────────────────────────────────
+// ── RENDIMIENTO ───────────────────────────────────────────
+function rRendimiento() {
+  const sold=(P().motos||[]).filter(m=>m.sold);
+  if(!sold.length) return`<div class="slbl">Rendimiento</div><p style="font-size:13px;color:var(--muted)">No hay motos vendidas todavía.</p>`;
+
+  // Por moto
+  const motoRows=sold.map(m=>{
+    const g=motoGain(m),ec=effCost(m),d=dys(m.buyDate,m.saleDate),gpd=g/d,mroi=(gpd*30)/ec;
+    return`<tr>
+      <td style="padding:7px 4px 7px 0;font-size:12px">${m.name.split(' ').slice(0,3).join(' ')}</td>
+      <td style="padding:7px 4px;font-size:12px;text-align:right">${hld(d)}</td>
+      <td style="padding:7px 4px;font-size:12px;text-align:right;color:${g>=0?'var(--green)':'var(--red)'}">+${fmt(g)}</td>
+      <td style="padding:7px 0 7px 4px;font-size:12px;text-align:right;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</td>
+    </tr>`;
+  }).join('');
+
+  // Por mes
+  const byMonth={};
+  sold.forEach(m=>{
+    const mo=getMonth(m.saleDate);
+    if(!byMonth[mo]) byMonth[mo]={gain:0,count:0};
+    byMonth[mo].gain+=motoGain(m)||0;
+    byMonth[mo].count++;
+  });
+  const monthRows=Object.entries(byMonth).sort((a,b)=>a[0]>b[0]?1:-1).map(([mo,d])=>`<tr>
+    <td style="padding:7px 0;font-size:12px">${mo}</td>
+    <td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td>
+    <td style="padding:7px 0;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td>
+  </tr>`).join('');
+
+  // Por año
+  const byYear={};
+  sold.forEach(m=>{
+    const yr=getYear(m.saleDate);
+    if(!byYear[yr]) byYear[yr]={gain:0,count:0,invested:0};
+    byYear[yr].gain+=motoGain(m)||0;
+    byYear[yr].count++;
+    byYear[yr].invested+=effCost(m);
+  });
+  const yearRows=Object.entries(byYear).sort().map(([yr,d])=>{
+    const roi=d.invested>0?d.gain/d.invested:0;
+    return`<tr>
+      <td style="padding:7px 0;font-size:12px">${yr}</td>
+      <td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td>
+      <td style="padding:7px 4px;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td>
+      <td style="padding:7px 0;font-size:12px;text-align:right;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</td>
+    </tr>`;
+  }).join('');
+
+  return`
+    <div class="slbl">Por moto vendida</div>
+    <div class="card">
+      <table class="roi-table">
+        <thead><tr><th>Moto</th><th style="text-align:right">Tiempo</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI/mes</th></tr></thead>
+        <tbody>${motoRows}</tbody>
+      </table>
+    </div>
+    <div class="slbl mt">Por mes</div>
+    <div class="card">
+      <table class="roi-table">
+        <thead><tr><th>Mes</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th></tr></thead>
+        <tbody>${monthRows}</tbody>
+      </table>
+    </div>
+    <div class="slbl mt">Por año</div>
+    <div class="card">
+      <table class="roi-table">
+        <thead><tr><th>Año</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI</th></tr></thead>
+        <tbody>${yearRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── TRANSFERENCIAS ────────────────────────────────────────
+function rTransferencias() {
+  const movs=(P().movimientos||[]);
+  const tiposHTML=`
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <button class="btn btn-r" onclick="openTransfer('retiro')">💸 Retiro / Traspaso de participación</button>
+      <button class="btn btn-p" onclick="openTransfer('aporte')">💵 Aporte de capital adicional</button>
+    </div>`;
+  let histHTML='';
+  if(movs.length){
+    const sorted=[...movs].sort((a,b)=>b.fecha>a.fecha?1:-1);
+    histHTML=sorted.map(mv=>{
+      const inv=P().members.find(i=>i.id===mv.invId);
+      const icons={retiro:'💸',aporte:'💵',traspaso:'🔄'};
+      const labels={retiro:'Retiro',aporte:'Aporte',traspaso:'Traspaso'};
+      return`<div class="mov-item">
+        <div>
+          <div class="mov-badge" style="background:${mv.tipo==='retiro'?'#FCEBEB':mv.tipo==='aporte'?'#EEEDFE':'#EAF3DE'};color:${mv.tipo==='retiro'?'var(--red)':mv.tipo==='aporte'?'var(--purple)':'var(--green)'}">${icons[mv.tipo]||'📋'} ${labels[mv.tipo]||mv.tipo}</div>
+          <div style="font-size:13px;font-weight:500;margin-top:3px">${inv?.name||mv.invId}${mv.toInvId?` → ${P().members.find(i=>i.id===mv.toInvId)?.name||mv.toInvId}`:''}</div>
+          ${mv.nota?`<div style="font-size:12px;color:var(--muted)">${mv.nota}</div>`:''}
+          <div style="font-size:11px;color:var(--muted)">${fD(mv.fecha)}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:700;color:${mv.tipo==='retiro'?'var(--red)':'var(--green)'}">${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}</div>
+          <button class="btn-sm btn-ds" style="margin-top:4px" onclick="delTransfer('${mv.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+  } else { histHTML=`<p style="font-size:13px;color:var(--muted)">No hay transferencias registradas.</p>`; }
+  return`
+    <div class="slbl">Nueva transferencia</div>
+    ${tiposHTML}
+    <div class="slbl mt">Historial</div>
+    <div class="card">${histHTML}</div>`;
+}
+
+function openTransfer(tipo) {
+  const el=document.getElementById('transferBody');
+  if(tipo==='aporte'){
+    document.getElementById('transferTitle').textContent='💵 Aporte de capital';
+    el.innerHTML=`
+      <div class="fg"><label>Socio que aporta</label><select id="tInv">${members().map(i=>`<option value="${i.id}">${i.name}</option>`).join('')}</select></div>
+      <div class="fg"><label>Monto (USD)</label><input type="number" id="tAmt" placeholder="0" min="0"></div>
+      <div class="fg"><label>Fecha</label><input type="date" id="tFecha" value="${tod()}"></div>
+      <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota" placeholder="Ej: Aporte para nueva moto"></div>
+      <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doAporte()">Registrar</button></div>`;
+  } else {
+    document.getElementById('transferTitle').textContent='💸 Retiro / Traspaso';
+    const mAct=(P().motos||[]).filter(m=>!m.sold);
+    const mOpts=`<option value="todas">Todas las motos activas</option>`+mAct.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+    el.innerHTML=`
+      <div class="fg"><label>Socio que retira</label><select id="tInvFrom" onchange="updateRetiroAmt()">${members().map(i=>`<option value="${i.id}">${i.name} (Capital: ${fmt(invTotCap(i))})</option>`).join('')}</select></div>
+      <div class="fg"><label>¿Retiro total o parcial?</label>
+        <select id="tRetiroTipo" onchange="updateRetiroAmt()">
+          <option value="total">Total (retira todo)</option>
+          <option value="parcial">Parcial (especificar monto)</option>
+        </select>
+      </div>
+      <div class="fg" id="fgAmt" style="display:none"><label>Monto a retirar (USD)</label><input type="number" id="tAmt" placeholder="0" min="0"></div>
+      <div id="fgAmtTotal" style="font-size:13px;color:var(--muted);margin-bottom:14px" ></div>
+      <div class="fg"><label>¿En qué motos?</label><select id="tMotos">${mOpts}</select></div>
+      <div class="fg"><label>¿Quién suplanta? (obligatorio)</label>
+        <select id="tInvTo">
+          <option value="">-- Seleccionar --</option>
+          <option value="nuevo">+ Agregar nuevo socio</option>
+          ${members().map(i=>`<option value="${i.id}">${i.name} (socio existente)</option>`).join('')}
+        </select>
+      </div>
+      <div id="fgNuevoSocio" style="display:none">
+        <div class="fg"><label>Nombre del nuevo socio</label><input type="text" id="tNuevoNombre" placeholder="Nombre completo"></div>
+        <div class="fg"><label>Email (para acceso al pool)</label><input type="email" id="tNuevoEmail" placeholder="email@ejemplo.com"></div>
+        <div class="fg"><label>Color</label><input type="color" id="tNuevoColor" value="#185FA5"></div>
+      </div>
+      <div class="fg"><label>Precio de la participación (USD)</label>
+        <input type="number" id="tPrecio" placeholder="0" min="0">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Puede ser igual al capital o negociado entre las partes.</div>
+      </div>
+      <div class="fg"><label>Fecha</label><input type="date" id="tFecha" value="${tod()}"></div>
+      <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota"></div>
+      <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doRetiro()">Confirmar retiro</button></div>`;
+    document.getElementById('tInvTo').addEventListener('change',function(){
+      document.getElementById('fgNuevoSocio').style.display=this.value==='nuevo'?'block':'none';
+    });
+    updateRetiroAmt();
+  }
+  openOv('ovTransfer');
+}
+
+function updateRetiroAmt(){
+  const invId=document.getElementById('tInvFrom')?.value;
+  const tipo=document.getElementById('tRetiroTipo')?.value;
+  const inv=P().members.find(i=>i.id===invId);
+  const cap=inv?invTotCap(inv):0;
+  const fgAmt=document.getElementById('fgAmt');
+  const fgTotal=document.getElementById('fgAmtTotal');
+  if(tipo==='total'){
+    if(fgAmt) fgAmt.style.display='none';
+    if(fgTotal) fgTotal.textContent=`Monto a retirar: ${fmt(cap)}`;
+  } else {
+    if(fgAmt) fgAmt.style.display='block';
+    if(fgTotal) fgTotal.textContent='';
+  }
+}
+
+function doAporte(){
+  const invId=document.getElementById('tInv').value;
+  const amt=parseFloat(document.getElementById('tAmt').value);
+  const fecha=document.getElementById('tFecha').value;
+  const nota=document.getElementById('tNota').value.trim();
+  if(!invId||isNaN(amt)||amt<=0||!fecha){alert('Completá todos los campos.');return;}
+  const inv=P().members.find(i=>i.id===invId);
+  if(inv) inv.cap+=amt;
+  if(!P().movimientos) P().movimientos=[];
+  P().movimientos.push({id:'mv'+Date.now(),invId,tipo:'aporte',amt,fecha,nota});
+  schedSave();closeOv('ovTransfer');renderAll();
+}
+
+function doRetiro(){
+  const fromId=document.getElementById('tInvFrom').value;
+  const retiroTipo=document.getElementById('tRetiroTipo').value;
+  const motoScope=document.getElementById('tMotos').value;
+  const toId=document.getElementById('tInvTo').value;
+  const precio=parseFloat(document.getElementById('tPrecio').value)||0;
+  const fecha=document.getElementById('tFecha').value;
+  const nota=document.getElementById('tNota').value.trim();
+  if(!toId){alert('Seleccioná quién suplanta la participación.');return;}
+  const fromInv=P().members.find(i=>i.id===fromId);
+  const capFrom=invTotCap(fromInv);
+  const amt=retiroTipo==='total'?capFrom:parseFloat(document.getElementById('tAmt').value)||0;
+  if(amt<=0){alert('Ingresá un monto válido.');return;}
+
+  // Si es socio nuevo, crearlo
+  let toInv=P().members.find(i=>i.id===toId);
+  if(toId==='nuevo'){
+    const nombre=document.getElementById('tNuevoNombre').value.trim();
+    const email=document.getElementById('tNuevoEmail').value.trim();
+    const color=document.getElementById('tNuevoColor').value;
+    if(!nombre||!email){alert('Ingresá nombre y email del nuevo socio.');return;}
+    const newId='inv'+Date.now();
+    toInv={id:newId,name:nombre,email,initials:nombre.slice(0,2).toUpperCase(),color,cap:0};
+    P().members.push(toInv);
+    if(!P().memberEmails) P().memberEmails=[];
+    P().memberEmails.push(email);
+  }
+
+  // Reasignar participación en motos
+  const motosAfectadas = motoScope==='todas'
+    ? (P().motos||[]).filter(m=>!m.sold&&mPartic(m).includes(fromId))
+    : (P().motos||[]).filter(m=>m.id===motoScope);
+
+  motosAfectadas.forEach(m=>{
+    // Agregar nuevo socio a participantes si no está
+    if(!mPartic(m).includes(toInv.id)){
+      m.participantes=[...mPartic(m),toInv.id];
+      m.extras[toInv.id]=0;
+    }
+    // Transferir aporte extra proporcional
+    const extraFrom=m.extras[fromId]||0;
+    if(retiroTipo==='total'){
+      m.extras[toInv.id]=(m.extras[toInv.id]||0)+extraFrom;
+      m.extras[fromId]=0;
+      m.participantes=m.participantes.filter(id=>id!==fromId);
+    } else {
+      // Transferencia parcial proporcional
+      const ratio=amt/capFrom;
+      const extraTransfer=extraFrom*ratio;
+      m.extras[toInv.id]=(m.extras[toInv.id]||0)+extraTransfer;
+      m.extras[fromId]=extraFrom-extraTransfer;
+    }
+  });
+
+  // Ajustar cap del socio entrante con el precio pagado
+  toInv.cap+=precio;
+
+  // Marcar retiro en el socio saliente
+  if(retiroTipo==='total'){
+    fromInv.retired=true;
+    fromInv.retiredAt=fecha;
+    fromInv.cap=0;
+  } else {
+    fromInv.cap=Math.max(0,fromInv.cap-amt);
+  }
+
+  // Registrar movimiento
+  if(!P().movimientos) P().movimientos=[];
+  P().movimientos.push({id:'mv'+Date.now(),invId:fromId,toInvId:toInv.id,tipo:'retiro',amt,precio,fecha,nota,motoScope});
+  schedSave();closeOv('ovTransfer');renderAll();
+}
+
+function delTransfer(id){
+  if(!confirm('¿Eliminar esta transferencia?'))return;
+  P().movimientos=(P().movimientos||[]).filter(m=>m.id!==id);
+  schedSave();renderAll();
+}
+
+// ── HISTORIAL ─────────────────────────────────────────────
+function rHistorial(){
+  const ev=[];
+  const startDate=(P().motos||[]).length?(P().motos[0].buyDate||tod()):tod();
+  ev.push({date:startDate,label:'Inicio del pool',sub:`${P().name} · ${members().length} socios`,color:'#534AB7',icon:'🚀'});
+  (P().motos||[]).forEach(m=>{
+    ev.push({date:m.buyDate,label:`Compra: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Costo ${fmt(m.cost)} · ${mPartic(m).map(id=>P().members.find(i=>i.id===id)?.name).filter(Boolean).join(', ')}`,color:'#185FA5',icon:'🛒'});
+    (m.extraCosts||[]).forEach(c=>{const pName=c.payer?P().members.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';ev.push({date:c.date,label:`Gasto: ${c.desc}`,sub:`${m.name.split(' ').slice(0,2).join(' ')} · -${fmt(c.amount)} · ${pName}`,color:'#854F0B',icon:'🔧'});});
+    if(m.sold) ev.push({date:m.saleDate,label:`Venta: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Ganancia ${fmt(motoGain(m))}`,color:'#3B6D11',icon:'💰'});
+  });
+  (P().movimientos||[]).forEach(mv=>{
+    const inv=P().members.find(i=>i.id===mv.invId);
+    const to=mv.toInvId?P().members.find(i=>i.id===mv.toInvId):null;
+    const icons={retiro:'💸',aporte:'💵'};
+    const labels={retiro:'Retiro',aporte:'Aporte'};
+    ev.push({date:mv.fecha,label:`${labels[mv.tipo]||mv.tipo}: ${inv?.name||mv.invId}${to?' → '+to.name:''}`,sub:`${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}${mv.nota?' · '+mv.nota:''}`,color:mv.tipo==='retiro'?'#A32D2D':'#534AB7',icon:icons[mv.tipo]||'📋'});
+  });
+  ev.sort((a,b)=>a.date>b.date?1:-1);
+  const items=ev.map((e,i)=>`<div class="tli"><div class="tldc"><div class="tld" style="background:${e.color}"></div>${i<ev.length-1?'<div class="tll"></div>':''}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${e.icon} ${e.label}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${fD(e.date)} · ${e.sub}</div></div></div>`).join('');
+  return`<div class="slbl">Línea de tiempo</div><div class="card">${items}</div>`;
+}
+
+// ── PROYECCIÓN ────────────────────────────────────────────
 function rProyeccion(){
-  const cap=totCap(), dA=dys('2026-03-19',tod());
-  const totalInv=S.investors.reduce((a,inv)=>a+invTotalInvested(inv),0);
-  const gain=S.motos.filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
+  const cap=totCap(),dA=dys((P().motos&&P().motos[0]?.buyDate)||'2026-03-19',tod());
+  const totalInv=members().reduce((a,inv)=>a+invTotalInvested(inv),0);
+  const gain=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
   const avgMr=dA>0&&totalInv>0?(gain/totalInv)/(dA/30):0.05;
   const ir=Math.min(30,Math.max(1,Math.round(avgMr*100)));
   return`
-    <div class="sec-lbl">Proyección de capital</div>
+    <div class="slbl">Proyección de capital</div>
     <div class="card" style="margin-bottom:12px">
       <div class="cr" style="border-top:none"><span class="crl">Capital base actual</span><span class="crv">${fmt(cap)}</span></div>
       <div class="cr"><span class="crl">ROI mensual realizado</span><span class="crg">${pct(avgMr)}/mes</span></div>
     </div>
-
     <div class="card" style="margin-bottom:12px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">ROI mensual esperado</div>
-      <div class="range-wrap">
-        <input type="range" id="projRate" min="1" max="30" step="1" value="${ir}">
-        <span class="range-val" id="projRateOut">${ir}%</span>
-      </div>
+      <div class="rw"><input type="range" id="projRate" min="1" max="30" step="1" value="${ir}"><span class="rv" id="projRateOut">${ir}%</span></div>
     </div>
-
-    <div class="sec-lbl" style="margin-top:4px">Meta de capital</div>
+    <div class="slbl">Meta de capital</div>
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:500">¿En cuánto tiempo llegás a tu meta?</div>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="metaInput" placeholder="Ej: 20000" min="0" style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
-        <button class="btn btn-primary" style="width:auto;padding:10px 16px" onclick="calcMeta()">Calcular</button>
+        <input type="number" id="metaInput" placeholder="Ej: 20000" min="0" style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px">
+        <button class="btn btn-p" style="width:auto;padding:10px 16px" onclick="calcMeta()">Calcular</button>
       </div>
       <div id="metaResult" style="margin-top:10px;font-size:13px;color:var(--muted)"></div>
     </div>
-
-    <div class="sec-lbl">Tabla de crecimiento</div>
+    <div class="slbl">Tabla de crecimiento</div>
     <div id="projTable"></div>
-
-    <div class="sec-lbl" style="margin-top:4px">Proyección por moto en cartera</div>
+    <div class="slbl mt">Por moto en cartera</div>
     <div id="projMotos"></div>`;
 }
 
 function bindProj(){
-  const sl=document.getElementById('projRate');
-  if(!sl)return;
+  const sl=document.getElementById('projRate'); if(!sl)return;
   const upd=()=>{
     const r=parseInt(sl.value)/100;
     document.getElementById('projRateOut').textContent=`${parseInt(sl.value)}%`;
     const cap=totCap();
-
-    // Tabla de crecimiento
-    const rows=[1,2,3,6,9,12,18,24].map(mo=>{
-      const proj=cap*Math.pow(1+r,mo), g=proj-cap;
-      return`<div class="proj-row"><span style="color:var(--muted)">${mo} mes${mo>1?'es':''}</span><div style="text-align:right"><span style="font-weight:600">${fmt(proj)}</span><span style="font-size:12px;color:var(--green);margin-left:8px">+${fmt(g)}</span></div></div>`;
-    }).join('');
-    document.getElementById('projTable').innerHTML=`<div class="card">${rows}</div>`;
-
-    // Proyección por moto activa
-    const act=S.motos.filter(m=>!m.sold);
-    if(act.length){
-      const motoCards=act.map(m=>{
-        const ec=effCost(m);
-        const scenarios=[
-          {label:'Pesimista',mult:0.9,color:'var(--red)'},
-          {label:'Esperado',mult:1.15,color:'var(--amber)'},
-          {label:'Optimista',mult:1.3,color:'var(--green)'}
-        ];
-        const rows=scenarios.map(sc=>{
-          const venta=ec*sc.mult, neto=venta*(1-0.1), g=neto-ec;
-          const roi=g/ec;
-          return`<div class="cr"><span class="crl">${sc.label} (${fmt(venta)})</span><span style="font-weight:600;color:${sc.color}">${g>=0?'+':''}${fmt(g)} (${pct(roi)})</span></div>`;
-        }).join('');
-        return`<div class="card">
-          <div style="font-size:13px;font-weight:600;margin-bottom:8px">${m.name}</div>
-          <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
-          <div class="cr"><span class="crl">Break-even (sin comisión)</span><span class="crv">${fmt(ec)}</span></div>
-          <div class="cr"><span class="crl">Break-even (con 10% comisión)</span><span class="crv">${fmt(ec/0.9)}</span></div>
-          <div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Escenarios de venta:</div>
-          ${rows}
-        </div>`;
-      }).join('');
-      document.getElementById('projMotos').innerHTML=motoCards;
-    } else {
-      document.getElementById('projMotos').innerHTML=`<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
-    }
+    document.getElementById('projTable').innerHTML=`<div class="card">${[1,2,3,6,9,12,18,24].map(mo=>{const proj=cap*Math.pow(1+r,mo),g=proj-cap;return`<div class="pr"><span style="color:var(--muted)">${mo} mes${mo>1?'es':''}</span><div style="text-align:right"><span style="font-weight:600">${fmt(proj)}</span><span style="font-size:12px;color:var(--green);margin-left:8px">+${fmt(g)}</span></div></div>`;}).join('')}</div>`;
+    const act=(P().motos||[]).filter(m=>!m.sold);
+    document.getElementById('projMotos').innerHTML=act.length?act.map(m=>{
+      const ec=effCost(m);
+      const sc=[{l:'Pesimista',mult:.9,c:'var(--red)'},{l:'Esperado',mult:1.15,c:'var(--amber)'},{l:'Optimista',mult:1.3,c:'var(--green)'}];
+      return`<div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:8px">${m.name}</div>
+        <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
+        <div class="cr"><span class="crl">Break-even (con 10%)</span><span class="crv">${fmt(ec/0.9)}</span></div>
+        <div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Escenarios:</div>
+        ${sc.map(s=>{const v=ec*s.mult,n=v*0.9,g=n-ec;return`<div class="cr"><span class="crl">${s.l} (${fmt(v)})</span><span style="font-weight:600;color:${s.c}">${g>=0?'+':''}${fmt(g)} (${pct(g/ec)})</span></div>`;}).join('')}
+      </div>`;
+    }).join(''):`<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
   };
-  sl.addEventListener('input',upd);
-  upd();
+  sl.addEventListener('input',upd); upd();
 }
 
 function calcMeta(){
@@ -722,23 +1073,23 @@ function calcMeta(){
   const sl=document.getElementById('projRate');
   if(!meta||meta<=0){document.getElementById('metaResult').textContent='Ingresá un monto válido.';return;}
   const cap=totCap();
-  if(meta<=cap){document.getElementById('metaResult').innerHTML=`<span style="color:var(--green);font-weight:600">✓ Ya superás esa meta. Tu capital actual es ${fmt(cap)}.</span>`;return;}
+  if(meta<=cap){document.getElementById('metaResult').innerHTML=`<span style="color:var(--green);font-weight:600">✓ Ya superás esa meta. Capital: ${fmt(cap)}.</span>`;return;}
   const r=parseInt(sl.value)/100;
-  let meses=0, c=cap;
+  let meses=0,c=cap;
   while(c<meta&&meses<600){c*=(1+r);meses++;}
-  const años=Math.floor(meses/12), mesRest=meses%12;
-  const tiempoStr=años>0?(mesRest>0?`${años} año${años>1?'s':''} y ${mesRest} mes${mesRest>1?'es':''}`:`${años} año${años>1?'s':''}`):`${meses} mes${meses>1?'es':''}`;
-  document.getElementById('metaResult').innerHTML=`Con un ROI de <strong>${parseInt(sl.value)}%/mes</strong>, llegás a <strong>${fmt(meta)}</strong> en <span style="color:var(--purple);font-weight:600">${tiempoStr}</span>.`;
+  const años=Math.floor(meses/12),mesRest=meses%12;
+  const str=años>0?(mesRest>0?`${años} año${años>1?'s':''} y ${mesRest} mes${mesRest>1?'es':''}`:`${años} año${años>1?'s':''}`):`${meses} mes${meses>1?'es':''}`;
+  document.getElementById('metaResult').innerHTML=`Con ${parseInt(sl.value)}%/mes llegás a <strong>${fmt(meta)}</strong> en <span style="color:var(--purple);font-weight:600">${str}</span>.`;
 }
 
-// ── SIMULADOR ────────────────────────────────────────────
+// ── SIMULADOR ─────────────────────────────────────────────
 function rSimulador(){
-  const act=S.motos.filter(m=>!m.sold);
-  if(!act.length) return`<div class="sec-lbl">Simulador de venta</div><p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
+  const act=(P().motos||[]).filter(m=>!m.sold);
+  if(!act.length) return`<div class="slbl">Simulador</div><p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
   const opts=act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-  const compareOpts=`<option value="">-- No comparar --</option>`+act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  const cOpts=`<option value="">-- No comparar --</option>`+act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   return`
-    <div class="sec-lbl">Simulador de venta</div>
+    <div class="slbl">Simulador de venta</div>
     <div class="card" style="margin-bottom:12px">
       <div class="fg"><label>Moto principal</label><select id="simMoto">${opts}</select></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
@@ -748,133 +1099,97 @@ function rSimulador(){
       </div>
       <div class="fg" style="margin-top:12px"><label>% comisión</label><input type="number" id="simComm" value="10" min="0" max="100"></div>
       <div class="fg"><label>Fecha estimada de venta</label><input type="date" id="simFechaVenta"></div>
-      <div class="fg"><label>Comparar con otra moto (opcional)</label><select id="simMoto2">${compareOpts}</select></div>
-      <button class="btn btn-primary" onclick="calcSim()">🔢 Calcular escenarios</button>
+      <div class="fg"><label>Comparar con otra moto</label><select id="simMoto2">${cOpts}</select></div>
+      <button class="btn btn-p" onclick="calcSim()">🔢 Calcular escenarios</button>
     </div>
     <div id="simResults"></div>`;
 }
 
-function simMotoCard(m, precio, comm, fechaVenta, label, color){
-  if(!precio||precio<=0) return'';
-  const neto=precio*(1-comm/100), ec=effCost(m), gain=neto-ec;
-  const roi=ec>0?gain/ec:0;
-  const dHeld=dys(m.buyDate, fechaVenta||tod());
-  const gpd=dHeld>0?gain/dHeld:0, mroi=ec>0?(gpd*30)/ec:0;
-  const breakEven=ec, breakEvenComm=ec/((100-comm)/100);
-  return`
-    <div style="background:${color}11;border:1px solid ${color}44;border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:6px">
-      <div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${label}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
-        <div><span style="color:var(--muted)">Precio venta</span><div style="font-weight:600">${fmt(precio)}</div></div>
-        <div><span style="color:var(--muted)">Neto recibido</span><div style="font-weight:600">${fmt(neto)}</div></div>
-        <div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':''}${fmt(gain)}</div></div>
-        <div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</div></div>
-        <div><span style="color:var(--muted)">ROI mensual</span><div style="font-weight:600;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div></div>
-        <div><span style="color:var(--muted)">Días en cartera</span><div style="font-weight:600">${dHeld}d</div></div>
-      </div>
-    </div>`;
+function simCard(m,precio,comm,fecha,label,color){
+  if(!precio||precio<=0)return'';
+  const neto=precio*(1-comm/100),ec=effCost(m),gain=neto-ec,roi=ec>0?gain/ec:0;
+  const d=dys(m.buyDate,fecha||tod()),gpd=d>0?gain/d:0,mroi=ec>0?(gpd*30)/ec:0;
+  return`<div style="background:${color}11;border:1px solid ${color}44;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px">
+    <div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${label}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
+      <div><span style="color:var(--muted)">Precio</span><div style="font-weight:600">${fmt(precio)}</div></div>
+      <div><span style="color:var(--muted)">Neto</span><div style="font-weight:600">${fmt(neto)}</div></div>
+      <div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':''}${fmt(gain)}</div></div>
+      <div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</div></div>
+      <div><span style="color:var(--muted)">ROI/mes</span><div style="font-weight:600;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div></div>
+      <div><span style="color:var(--muted)">Días</span><div style="font-weight:600">${d}d</div></div>
+    </div>
+  </div>`;
 }
 
 function calcSim(){
-  const mId=document.getElementById('simMoto').value;
-  const mId2=document.getElementById('simMoto2').value;
-  const p1=parseFloat(document.getElementById('simP1').value);
-  const p2=parseFloat(document.getElementById('simP2').value);
-  const p3=parseFloat(document.getElementById('simP3').value);
+  const mId=document.getElementById('simMoto').value,mId2=document.getElementById('simMoto2').value;
+  const p1=parseFloat(document.getElementById('simP1').value),p2=parseFloat(document.getElementById('simP2').value),p3=parseFloat(document.getElementById('simP3').value);
   const comm=parseFloat(document.getElementById('simComm').value)||10;
-  const fechaVenta=document.getElementById('simFechaVenta').value||tod();
+  const fv=document.getElementById('simFechaVenta').value||tod();
   if(!p1&&!p2&&!p3){alert('Ingresá al menos un precio.');return;}
-  const m=S.motos.find(x=>x.id===mId); if(!m)return;
-  const ec=effCost(m);
-  const breakEven=ec, breakEvenComm=Math.ceil(ec/((100-comm)/100));
-
-  // Escenarios moto principal
-  let html=`
-    <div class="sec-lbl">${m.name.split(' ').slice(0,3).join(' ')}</div>
+  const m=(P().motos||[]).find(x=>x.id===mId);if(!m)return;
+  const ec=effCost(m),bec=Math.ceil(ec/((100-comm)/100));
+  let html=`<div class="slbl">${m.name.split(' ').slice(0,3).join(' ')}</div>
     <div class="card" style="margin-bottom:4px">
       <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
-      <div class="cr"><span class="crl">Break-even (sin comisión)</span><span class="crv">${fmt(breakEven)}</span></div>
-      <div class="cr"><span class="crl">Break-even (con ${comm}% comisión)</span><span class="crv">${fmt(breakEvenComm)}</span></div>
+      <div class="cr"><span class="crl">Break-even (con ${comm}%)</span><span class="crv">${fmt(bec)}</span></div>
     </div>`;
-
-  if(p1) html+=simMotoCard(m,p1,comm,fechaVenta,'Pesimista','#A32D2D');
-  if(p2) html+=simMotoCard(m,p2,comm,fechaVenta,'Esperado','#854F0B');
-  if(p3) html+=simMotoCard(m,p3,comm,fechaVenta,'Optimista','#3B6D11');
-
-  // Mejor escenario: distribución por socio
-  const bestPrecio=p3||p2||p1;
-  const bestNeto=bestPrecio*(1-comm/100), bestGain=bestNeto-ec;
-  const nuevoTot=totCap()+bestGain;
-  const invRows=S.investors.map(inv=>{
-    const p=ec>0?motoInvCost(m,inv)/ec:invBaseSh(inv), ig=bestGain*p, nc=invTotCap(inv)+ig;
-    return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${bestGain>=0?'crg':'crn'}">${bestGain>=0?'+':''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;
-  }).join('');
-  html+=`<div class="card" style="margin-top:8px">
-    <div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nuevoTot)}</span></div>
-    <div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio (escenario optimista):</div>${invRows}
-  </div>`;
-
-  // Comparación con segunda moto
-  if(mId2){
-    const m2=S.motos.find(x=>x.id===mId2);
-    if(m2&&m2.id!==m.id){
-      const ec2=effCost(m2);
-      html+=`<div class="sec-lbl" style="margin-top:12px">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div>
-      <div class="card" style="margin-bottom:4px">
-        <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div>
-        <div class="cr"><span class="crl">Break-even (con ${comm}% comisión)</span><span class="crv">${fmt(Math.ceil(ec2/((100-comm)/100)))}</span></div>
-      </div>`;
-      if(p1) html+=simMotoCard(m2,p1,comm,fechaVenta,'Pesimista','#A32D2D');
-      if(p2) html+=simMotoCard(m2,p2,comm,fechaVenta,'Esperado','#854F0B');
-      if(p3) html+=simMotoCard(m2,p3,comm,fechaVenta,'Optimista','#3B6D11');
-    }
-  }
-
+  if(p1)html+=simCard(m,p1,comm,fv,'Pesimista','#A32D2D');
+  if(p2)html+=simCard(m,p2,comm,fv,'Esperado','#854F0B');
+  if(p3)html+=simCard(m,p3,comm,fv,'Optimista','#3B6D11');
+  const bp=p3||p2||p1,bn=bp*(1-comm/100),bg=bn-ec,nT=totCap()+bg;
+  const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
+  const totalInvP=parts.reduce((a,inv)=>a+motoInvCost(m,inv),0);
+  const invRows=parts.map(inv=>{const p=totalInvP>0?motoInvCost(m,inv)/totalInvP:0,ig=bg*p,nc=invTotCap(inv)+ig;return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${bg>=0?'crg':'crn'}">${bg>=0?'+':''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;}).join('');
+  html+=`<div class="card" style="margin-top:8px"><div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nT)}</span></div><div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio (optimista):</div>${invRows}</div>`;
+  if(mId2){const m2=(P().motos||[]).find(x=>x.id===mId2);if(m2&&m2.id!==m.id){const ec2=effCost(m2),bec2=Math.ceil(ec2/((100-comm)/100));html+=`<div class="slbl mt">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div><div class="card" style="margin-bottom:4px"><div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div><div class="cr"><span class="crl">Break-even (con ${comm}%)</span><span class="crv">${fmt(bec2)}</span></div></div>`;if(p1)html+=simCard(m2,p1,comm,fv,'Pesimista','#A32D2D');if(p2)html+=simCard(m2,p2,comm,fv,'Esperado','#854F0B');if(p3)html+=simCard(m2,p3,comm,fv,'Optimista','#3B6D11');}}
   document.getElementById('simResults').innerHTML=html;
 }
 
-// ── MODALES ──────────────────────────────────────────────
-function openOverlay(id){ document.getElementById(id).classList.add('open'); }
-function closeOverlay(id){ document.getElementById(id).classList.remove('open'); }
+// ── MODALES ───────────────────────────────────────────────
+function openOv(id){document.getElementById(id).classList.add('open');}
+function closeOv(id){document.getElementById(id).classList.remove('open');}
 
 function openAddMoto(){
   document.getElementById('mFecha').value=tod();
   document.getElementById('mNom').value='';
   document.getElementById('mCosto').value='';
-  document.getElementById('mExtras').innerHTML=S.investors.map(inv=>`<div class="contrib-row"><span class="contrib-name">${inv.name}</span><input type="number" id="mEx_${inv.id}" placeholder="0" min="0"></div>`).join('');
-  openOverlay('overlayAddMoto');
+  document.getElementById('mPartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="mp_${inv.id}" checked><label for="mp_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
+  document.getElementById('mExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="mEx_${inv.id}" placeholder="0" min="0"></div>`).join('');
+  openOv('ovAddMoto');
 }
 
 function doAddMoto(){
-  const name=document.getElementById('mNom').value.trim();
-  const cost=parseFloat(document.getElementById('mCosto').value);
-  const buyDate=document.getElementById('mFecha').value;
+  const name=document.getElementById('mNom').value.trim(),cost=parseFloat(document.getElementById('mCosto').value),buyDate=document.getElementById('mFecha').value;
   if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
-  const extras={};
-  S.investors.forEach(inv=>{const el=document.getElementById('mEx_'+inv.id);extras[inv.id]=el?parseFloat(el.value)||0:0;});
-  S.motos.push({id:'m'+S.nextId++,name,cost,buyDate,sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,extras,extraCosts:[]});
-  schedSave(); closeOverlay('overlayAddMoto'); renderAll();
+  const participantes=members().filter(inv=>document.getElementById('mp_'+inv.id)?.checked).map(inv=>inv.id);
+  if(!participantes.length){alert('Seleccioná al menos un participante.');return;}
+  const extras={};members().forEach(inv=>{const el=document.getElementById('mEx_'+inv.id);extras[inv.id]=el?parseFloat(el.value)||0:0;});
+  if(!P().motos) P().motos=[];
+  P().motos.push({id:'m'+P().nextId++,name,cost,buyDate,sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,participantes,extras,extraCosts:[]});
+  schedSave();closeOv('ovAddMoto');renderAll();
 }
 
 function openEditMoto(id){
-  editId=id;
-  const m=S.motos.find(x=>x.id===id); if(!m)return;
+  editMotoId=id;
+  const m=(P().motos||[]).find(x=>x.id===id);if(!m)return;
   document.getElementById('eNom').value=m.name;
   document.getElementById('eFecha').value=m.buyDate;
   document.getElementById('eCosto').value=m.cost;
-  document.getElementById('eExtras').innerHTML=S.investors.map(inv=>`<div class="contrib-row"><span class="contrib-name">${inv.name}</span><input type="number" id="eEx_${inv.id}" value="${m.extras[inv.id]||0}" min="0"></div>`).join('');
-  openOverlay('overlayEditMoto');
+  document.getElementById('ePartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="ep_${inv.id}"${mPartic(m).includes(inv.id)?' checked':''}><label for="ep_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
+  document.getElementById('eExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="eEx_${inv.id}" value="${m.extras[inv.id]||0}" min="0"></div>`).join('');
+  openOv('ovEditMoto');
 }
 
 function doEditMoto(){
-  const m=S.motos.find(x=>x.id===editId); if(!m)return;
-  const name=document.getElementById('eNom').value.trim();
-  const cost=parseFloat(document.getElementById('eCosto').value);
-  const buyDate=document.getElementById('eFecha').value;
+  const m=(P().motos||[]).find(x=>x.id===editMotoId);if(!m)return;
+  const name=document.getElementById('eNom').value.trim(),cost=parseFloat(document.getElementById('eCosto').value),buyDate=document.getElementById('eFecha').value;
   if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
-  m.name=name; m.cost=cost; m.buyDate=buyDate;
-  S.investors.forEach(inv=>{const el=document.getElementById('eEx_'+inv.id);m.extras[inv.id]=el?parseFloat(el.value)||0:0;});
-  schedSave(); closeOverlay('overlayEditMoto'); renderAll();
+  m.name=name;m.cost=cost;m.buyDate=buyDate;
+  m.participantes=members().filter(inv=>document.getElementById('ep_'+inv.id)?.checked).map(inv=>inv.id);
+  members().forEach(inv=>{const el=document.getElementById('eEx_'+inv.id);m.extras[inv.id]=el?parseFloat(el.value)||0:0;});
+  schedSave();closeOv('ovEditMoto');renderAll();
 }
 
 function openSell(id){
@@ -882,53 +1197,43 @@ function openSell(id){
   document.getElementById('sFecha').value=tod();
   document.getElementById('sPrecio').value='';
   document.getElementById('sComm').value='10';
-  openOverlay('overlaySell');
+  openOv('ovSell');
 }
 
 function doSell(){
-  const sp=parseFloat(document.getElementById('sPrecio').value);
-  const comm=parseFloat(document.getElementById('sComm').value)||10;
-  const saleDate=document.getElementById('sFecha').value;
+  const sp=parseFloat(document.getElementById('sPrecio').value),comm=parseFloat(document.getElementById('sComm').value)||10,saleDate=document.getElementById('sFecha').value;
   if(!sp||sp<=0||!saleDate){alert('Completá todos los campos.');return;}
-  const m=S.motos.find(x=>x.id===sellId);
+  const m=(P().motos||[]).find(x=>x.id===sellId);
   if(m){m.sold=true;m.salePrice=sp;m.comm=comm;m.netSale=sp*(1-comm/100);m.saleDate=saleDate;}
-  schedSave(); closeOverlay('overlaySell'); renderAll();
+  schedSave();closeOv('ovSell');renderAll();
 }
 
 function openAddCost(id){
-  costId=id;
+  costMotoId=id;
   document.getElementById('cDesc').value='';
   document.getElementById('cAmt').value='';
   document.getElementById('cDate').value=tod();
-  // Populate payer dropdown
-  const sel=document.getElementById('cPayer');
-  sel.innerHTML=`<option value="">-- Se reparte proporcionalmente --</option>`+
-    S.investors.map(inv=>`<option value="${inv.id}">${inv.name} (cuenta como aporte extra)</option>`).join('');
-  openOverlay('overlayAddCost');
+  document.getElementById('cPayer').innerHTML=`<option value="">-- Se reparte proporcionalmente --</option>`+members().map(inv=>`<option value="${inv.id}">${inv.name}</option>`).join('');
+  openOv('ovAddCost');
 }
 
 function doAddCost(){
-  const desc=document.getElementById('cDesc').value.trim();
-  const amt=parseFloat(document.getElementById('cAmt').value);
-  const date=document.getElementById('cDate').value;
-  const payer=document.getElementById('cPayer').value;
+  const desc=document.getElementById('cDesc').value.trim(),amt=parseFloat(document.getElementById('cAmt').value),date=document.getElementById('cDate').value,payer=document.getElementById('cPayer').value;
   if(!desc||isNaN(amt)||amt<=0){alert('Completá descripción y monto.');return;}
-  const m=S.motos.find(x=>x.id===costId);
+  const m=(P().motos||[]).find(x=>x.id===costMotoId);
   if(!m.extraCosts)m.extraCosts=[];
   m.extraCosts.push({desc,amount:amt,date,payer});
-  schedSave(); closeOverlay('overlayAddCost'); renderAll();
+  schedSave();closeOv('ovAddCost');renderAll();
 }
 
 function delCost(motoId,idx){
   if(!confirm('¿Eliminar este costo?'))return;
-  const m=S.motos.find(x=>x.id===motoId);
+  const m=(P().motos||[]).find(x=>x.id===motoId);
   if(m&&m.extraCosts)m.extraCosts.splice(idx,1);
-  schedSave(); renderAll();
+  schedSave();renderAll();
 }
 
-document.querySelectorAll('.overlay').forEach(ov=>{
-  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
-});
+document.querySelectorAll('.ov').forEach(ov=>{ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});});
 </script>
 </body>
 </html>
