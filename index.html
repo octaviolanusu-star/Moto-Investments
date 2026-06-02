@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, query, where, getDocs, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const cfg = {
@@ -27,14 +27,16 @@ const gProvider = new GoogleAuthProvider();
 window._db = db;
 window._auth = auth;
 window._set = setDoc;
-window._doc = doc;
 window._getDoc = getDoc;
+window._doc = doc;
 window._onSnap = onSnapshot;
 window._col = collection;
 window._query = query;
 window._where = where;
 window._getDocs = getDocs;
-
+window._updateDoc = updateDoc;
+window._arrayUnion = arrayUnion;
+window._arrayRemove = arrayRemove;
 window._signIn = () => signInWithPopup(auth, gProvider);
 window._signOut = () => signOut(auth);
 
@@ -80,6 +82,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
 .b-sold{background:var(--green-bg);color:var(--green-text)}
 .b-active{background:var(--blue-bg);color:var(--blue-text)}
+.b-admin{background:#EEEDFE;color:var(--purple)}
 .moto-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
 .moto-name{font-size:14px;font-weight:600;line-height:1.3}
 .moto-date{font-size:11px;color:var(--muted);margin-top:2px}
@@ -120,10 +123,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .rw{display:flex;align-items:center;gap:10px}
 .rw input[type=range]{flex:1;accent-color:var(--purple)}
 .rv{font-size:14px;font-weight:600;min-width:38px;text-align:right;color:var(--purple)}
-.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.sr{background:var(--bg);border-radius:var(--rs);padding:12px;text-align:center;border:1px solid var(--border)}
-.sv{font-size:20px;font-weight:700}
-.sl{font-size:11px;color:var(--muted);margin-top:3px}
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:flex-end;justify-content:center}
 .ov.open{display:flex}
 .sh{background:#fff;border-radius:20px 20px 0 0;padding:20px 20px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto}
@@ -131,7 +130,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sh h3{font-size:16px;font-weight:600;margin-bottom:16px}
 .fg{margin-bottom:14px}
 .fg label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:500}
-.fg input,.fg select,.fg textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:#fff;color:var(--text)}
+.fg input,.fg select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:#fff;color:var(--text)}
 .fg input:focus,.fg select:focus{outline:none;border-color:var(--purple)}
 .sa{display:flex;gap:10px;margin-top:16px}
 .sa .btn{flex:1}
@@ -142,28 +141,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .part-check input[type=checkbox]{width:18px;height:18px;accent-color:var(--purple)}
 .detail-panel{display:none;border-top:1px solid var(--border);margin-top:10px;padding-top:10px}
 .detail-panel.open{display:block}
-.pool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;cursor:pointer}
-.pool-card:hover{border-color:var(--purple)}
-.pool-card h3{font-size:15px;font-weight:600;margin-bottom:4px}
-.pool-card p{font-size:12px;color:var(--muted)}
+.roi-table{width:100%;font-size:12px;border-collapse:collapse}
+.roi-table th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:4px 0;border-bottom:1px solid var(--border)}
+.roi-table td{padding:6px 0;border-bottom:1px solid var(--border)}
+.roi-table tr:last-child td{border-bottom:none}
+.mov-badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.access-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border);font-size:13px}
+.access-row:first-child{border-top:none}
 .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
 .login-card{background:#fff;border:1px solid var(--border);border-radius:var(--r);padding:32px 24px;width:100%;max-width:360px;text-align:center}
 .login-card h1{font-size:24px;font-weight:700;margin-bottom:8px}
 .login-card p{font-size:14px;color:var(--muted);margin-bottom:28px}
 .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--rs);background:#fff;font-size:14px;font-weight:500;cursor:pointer;color:var(--text)}
 .btn-google:hover{background:var(--bg)}
-.user-av{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.user-av{width:32px;height:32px;border-radius:50%;object-fit:cover;cursor:pointer}
+.pool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;cursor:pointer}
+.pool-card:hover{border-color:var(--purple)}
+.pool-selector{padding:16px}
+.noaccess{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
 .section-toggle{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:4px 0}
 .section-toggle .arrow{font-size:12px;color:var(--muted);transition:transform .2s}
 .section-toggle.open .arrow{transform:rotate(180deg)}
-.mov-badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
-.roi-table{width:100%;font-size:12px;border-collapse:collapse}
-.roi-table th{font-size:11px;color:var(--muted);font-weight:500;text-align:left;padding:4px 0;border-bottom:1px solid var(--border)}
-.roi-table td{padding:6px 0;border-bottom:1px solid var(--border)}
-.roi-table tr:last-child td{border-bottom:none}
-.pool-selector{padding:16px}
-.pool-selector h2{font-size:18px;font-weight:600;margin-bottom:4px}
-.pool-selector p{font-size:13px;color:var(--muted);margin-bottom:16px}
 </style>
 </head>
 <body>
@@ -173,7 +171,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="login-card">
     <div style="font-size:48px;margin-bottom:16px">🏍️</div>
     <h1>Moto Inversiones</h1>
-    <p>Iniciá sesión para acceder a tus pools de inversión</p>
+    <p>Iniciá sesión con tu cuenta de Google para acceder</p>
     <button class="btn-google" onclick="doSignIn()">
       <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.3z"/></svg>
       Continuar con Google
@@ -182,13 +180,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- NO ACCESS -->
+<div class="noaccess" id="noAccessScreen" style="display:none">
+  <div>
+    <div style="font-size:48px;margin-bottom:16px">🔒</div>
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:8px">Sin acceso</h2>
+    <p style="font-size:14px;color:var(--muted);margin-bottom:24px">Tu cuenta no tiene acceso a ningún pool.<br>Contactá a Octavio para que te agregue.</p>
+    <button class="btn btn-o" style="width:auto;padding:10px 20px;margin:0 auto" onclick="doSignOut()">Cerrar sesión</button>
+  </div>
+</div>
+
 <!-- POOL SELECTOR -->
 <div id="poolSelector" style="display:none">
   <div class="pool-selector">
-    <h2>🏍️ Mis Pools</h2>
-    <p>Seleccioná un pool para ver tu inversión</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <h2 style="font-size:18px;font-weight:600">🏍️ Mis Pools</h2>
+        <p style="font-size:13px;color:var(--muted);margin-top:2px" id="poolUserEmail"></p>
+      </div>
+      <img id="poolUserAvatar" class="user-av" src="" alt="" style="display:none" onclick="doSignOut()">
+    </div>
     <div id="poolList"></div>
-    <button class="btn btn-d" id="btnNewPool" style="display:none" onclick="openNewPool()">+ Crear nuevo pool</button>
   </div>
 </div>
 
@@ -198,8 +210,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="hdr">
     <div class="hdr-left">
       <button class="btn-sm" onclick="backToPools()" style="padding:5px 8px;flex-shrink:0">← Pools</button>
-      <div>
-        <h1 id="poolNameHdr">🏍️ Pool</h1>
+      <div style="min-width:0">
+        <h1 id="poolNameHdr">🏍️</h1>
         <p id="userEmailHdr"></p>
       </div>
     </div>
@@ -209,7 +221,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
   <div class="kpi-sec"><div class="kpi-grid" id="kpiGrid"></div></div>
-  <div class="nav">
+  <div class="nav" id="mainNav">
     <button class="nav-btn active" data-tab="resumen" onclick="sw('resumen')">Resumen</button>
     <button class="nav-btn" data-tab="motos" onclick="sw('motos')">Motos</button>
     <button class="nav-btn" data-tab="socios" onclick="sw('socios')">Socios</button>
@@ -218,6 +230,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="nav-btn" data-tab="historial" onclick="sw('historial')">Historial</button>
     <button class="nav-btn" data-tab="proyeccion" onclick="sw('proyeccion')">Proyección</button>
     <button class="nav-btn" data-tab="simulador" onclick="sw('simulador')">Simulador</button>
+    <button class="nav-btn" data-tab="admin" onclick="sw('admin')" id="adminTab" style="display:none">⚙️ Admin</button>
   </div>
   <div class="content" id="tabContent"></div>
 </div>
@@ -266,14 +279,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="transferBody"></div>
 </div></div>
 
-<div class="ov" id="ovNewPool"><div class="sh"><div class="sh-h"></div>
+<div class="ov" id="ovAddPool"><div class="sh"><div class="sh-h"></div>
   <h3>🏊 Crear nuevo pool</h3>
-  <div class="fg"><label>Nombre del pool</label><input type="text" id="newPoolName" placeholder="Ej: Motos 2026, Autos, etc."></div>
+  <div class="fg"><label>Nombre del pool</label><input type="text" id="newPoolName" placeholder="Ej: Motos 2026"></div>
   <div class="fg"><label>Descripción (opcional)</label><input type="text" id="newPoolDesc" placeholder="Ej: Pool de inversión en motos"></div>
-  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovNewPool')">Cancelar</button><button class="btn btn-p" onclick="doCreatePool()">Crear pool</button></div>
+  <div class="sa"><button class="btn btn-o" onclick="closeOv('ovAddPool')">Cancelar</button><button class="btn btn-p" onclick="doCreatePool()">Crear</button></div>
 </div></div>
 
 <script>
+// ── CONSTANTES ────────────────────────────────────────────
+const ADMIN_EMAIL = 'octavio.lanusu@gmail.com';
+
 // ── STATE ─────────────────────────────────────────────────
 let currentUser = null;
 let currentPoolId = null;
@@ -285,276 +301,255 @@ let saveTimer = null;
 let editMotoId = null;
 let sellId = null;
 let costMotoId = null;
+const isAdmin = () => currentUser?.email === ADMIN_EMAIL;
 
 // ── AUTH ──────────────────────────────────────────────────
 window._onAuthChange = async (user) => {
   currentUser = user;
-  if (!user) {
-    showScreen('login');
-  } else {
-    document.getElementById('userEmailHdr').textContent = user.email;
-    if (user.photoURL) {
-      document.getElementById('userAvatar').src = user.photoURL;
-      document.getElementById('userAvatar').style.display = 'block';
-    }
-    showScreen('pools');
-    await loadPools();
+  if (!user) { showScreen('login'); return; }
+  if (user.photoURL) {
+    ['userAvatar','poolUserAvatar'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){el.src=user.photoURL;el.style.display='block';}
+    });
   }
+  const emailEl=document.getElementById('userEmailHdr');
+  if(emailEl) emailEl.textContent=user.email;
+  const poolEmailEl=document.getElementById('poolUserEmail');
+  if(poolEmailEl) poolEmailEl.textContent=user.email;
+  showScreen('pools');
+  await loadPools();
 };
 
 async function doSignIn() {
-  try {
-    document.getElementById('loginError').textContent = '';
-    await window._signIn();
-  } catch(e) {
-    document.getElementById('loginError').textContent = 'Error al iniciar sesión. Intentá de nuevo.';
-  }
+  try { document.getElementById('loginError').textContent=''; await window._signIn(); }
+  catch(e) { document.getElementById('loginError').textContent='Error al iniciar sesión. Intentá de nuevo.'; }
 }
-
 function doSignOut() {
-  if (!confirm('¿Cerrar sesión?')) return;
-  if (unsubPool) { unsubPool(); unsubPool = null; }
-  currentPoolId = null; currentPool = null;
+  if(!confirm('¿Cerrar sesión?'))return;
+  if(unsubPool){unsubPool();unsubPool=null;}
+  currentPoolId=null;currentPool=null;
   window._signOut();
 }
-
 function showScreen(s) {
-  document.getElementById('loginScreen').style.display = s==='login' ? 'flex' : 'none';
-  document.getElementById('poolSelector').style.display = s==='pools' ? 'block' : 'none';
-  document.getElementById('mainApp').style.display = s==='app' ? 'block' : 'none';
+  document.getElementById('loginScreen').style.display=s==='login'?'flex':'none';
+  document.getElementById('noAccessScreen').style.display=s==='noaccess'?'flex':'none';
+  document.getElementById('poolSelector').style.display=s==='pools'?'block':'none';
+  document.getElementById('mainApp').style.display=s==='app'?'block':'none';
 }
 
 // ── POOLS ─────────────────────────────────────────────────
 async function loadPools() {
-  if (!currentUser) return;
-  pill('Cargando...','saving');
+  if(!currentUser)return;
   try {
-    // Get all pools where user is a member
-    const snap = await window._getDocs(
-      window._query(
-        window._col(window._db, 'pools'),
-        window._where('memberEmails', 'array-contains', currentUser.email)
-      )
-    );
-    const pools = [];
-    snap.forEach(d => pools.push({id: d.id, ...d.data()}));
+    // Admin ve todos los pools; otros ven solo los autorizados
+    let poolsSnap;
+    if(isAdmin()){
+      poolsSnap=await window._getDocs(window._col(window._db,'pools'));
+    } else {
+      poolsSnap=await window._getDocs(
+        window._query(window._col(window._db,'pools'),
+          window._where('authorizedEmails','array-contains',currentUser.email))
+      );
+    }
+    const pools=[];
+    poolsSnap.forEach(d=>pools.push({id:d.id,...d.data()}));
 
-    // Also check if user is owner
-    const ownSnap = await window._getDocs(
-      window._query(
-        window._col(window._db, 'pools'),
-        window._where('ownerEmail', '==', currentUser.email)
-      )
-    );
-    ownSnap.forEach(d => { if(!pools.find(p=>p.id===d.id)) pools.push({id:d.id,...d.data()}); });
-
+    if(!pools.length && !isAdmin()){showScreen('noaccess');return;}
     renderPoolList(pools);
-    // Show create button only for owner or anyone
-    document.getElementById('btnNewPool').style.display = 'flex';
-  } catch(e) {
-    console.error(e);
-    pill('Error','error');
-  }
+    showScreen('pools');
+  } catch(e){console.error(e);}
 }
 
-function renderPoolList(pools) {
-  const el = document.getElementById('poolList');
-  if (!pools.length) {
-    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--muted)">
-      <div style="font-size:40px;margin-bottom:12px">🏊</div>
-      <p style="font-size:14px;">No tenés pools todavía.</p>
-      <p style="font-size:13px;margin-top:6px;">Creá uno para empezar.</p>
-    </div>`;
+function renderPoolList(pools){
+  const el=document.getElementById('poolList');
+  if(!pools.length){
+    el.innerHTML=`<div style="text-align:center;padding:32px;color:var(--muted)"><div style="font-size:40px;margin-bottom:12px">🏊</div><p>No hay pools todavía.</p></div>`;
+    if(isAdmin()) el.innerHTML+=`<button class="btn btn-d" onclick="openOv('ovAddPool')">+ Crear nuevo pool</button>`;
     return;
   }
-  el.innerHTML = pools.map(p => {
-    const members = (p.members||[]).length;
-    const motos = (p.motos||[]).length;
-    return `<div class="pool-card" onclick="selectPool('${p.id}')">
-      <h3>${p.name||'Sin nombre'}</h3>
-      <p>${p.desc||''}</p>
+  el.innerHTML=pools.map(p=>{
+    const members=(p.members||[]).length;
+    const motos=(p.motos||[]).length;
+    return`<div class="pool-card" onclick="selectPool('${p.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <h3 style="font-size:15px;font-weight:600">${p.name||'Sin nombre'}</h3>
+        ${isAdmin()?'<span class="badge b-admin">Admin</span>':''}
+      </div>
+      <p style="font-size:12px;color:var(--muted)">${p.desc||''}</p>
       <div style="display:flex;gap:12px;margin-top:8px;font-size:12px;color:var(--muted)">
         <span>👥 ${members} socio${members!==1?'s':''}</span>
         <span>🏍️ ${motos} moto${motos!==1?'s':''}</span>
       </div>
     </div>`;
   }).join('');
+  if(isAdmin()) el.innerHTML+=`<button class="btn btn-d" onclick="openOv('ovAddPool')" style="margin-top:8px">+ Crear nuevo pool</button>`;
 }
 
-async function selectPool(poolId) {
-  currentPoolId = poolId;
-  if (unsubPool) { unsubPool(); unsubPool = null; }
-  pill('Cargando...','saving');
+async function selectPool(poolId){
+  currentPoolId=poolId;
+  if(unsubPool){unsubPool();unsubPool=null;}
   showScreen('app');
-  // Real-time listener
-  unsubPool = window._onSnap(
-    window._doc(window._db, 'pools', poolId),
-    (snap) => {
-      if (snap.exists()) {
-        currentPool = migrate(snap.data());
-        document.getElementById('poolNameHdr').textContent = '🏍️ ' + (currentPool.name||'Pool');
+  pill('Cargando...','saving');
+  // Mostrar tab admin solo para admin
+  const adminTab=document.getElementById('adminTab');
+  if(adminTab) adminTab.style.display=isAdmin()?'block':'none';
+  unsubPool=window._onSnap(
+    window._doc(window._db,'pools',poolId),
+    (snap)=>{
+      if(snap.exists()){
+        currentPool=migrate(snap.data());
+        document.getElementById('poolNameHdr').textContent='🏍️ '+(currentPool.name||'Pool');
         renderAll();
         pill('✓ Sync','');
       }
     },
-    (err) => { console.error(err); pill('Error','error'); }
+    (err)=>{console.error(err);pill('Error','error');}
   );
 }
 
-function backToPools() {
-  if (unsubPool) { unsubPool(); unsubPool = null; }
-  currentPoolId = null; currentPool = null;
-  showScreen('pools');
+function backToPools(){
+  if(unsubPool){unsubPool();unsubPool=null;}
+  currentPoolId=null;currentPool=null;
+  showScreen('pools');loadPools();
+}
+
+async function doCreatePool(){
+  if(!isAdmin()){alert('Solo el administrador puede crear pools.');return;}
+  const name=document.getElementById('newPoolName').value.trim();
+  const desc=document.getElementById('newPoolDesc').value.trim();
+  if(!name){alert('Ingresá un nombre.');return;}
+  const poolData={
+    name,desc,
+    ownerEmail:ADMIN_EMAIL,
+    authorizedEmails:[ADMIN_EMAIL],
+    members:[{id:'octa',name:'Octavio',email:ADMIN_EMAIL,initials:'OC',color:'#534AB7',cap:0}],
+    motos:[],movimientos:[],nextId:1
+  };
+  const ref=window._doc(window._col(window._db,'pools'));
+  await window._set(ref,poolData);
+  closeOv('ovAddPool');
   loadPools();
 }
 
-function openNewPool() { openOv('ovNewPool'); }
-
-async function doCreatePool() {
-  const name = document.getElementById('newPoolName').value.trim();
-  const desc = document.getElementById('newPoolDesc').value.trim();
-  if (!name) { alert('Ingresá un nombre para el pool.'); return; }
-  const poolData = {
-    name, desc,
-    ownerEmail: currentUser.email,
-    memberEmails: [currentUser.email],
-    members: [{
-      id: currentUser.uid,
-      name: currentUser.displayName||currentUser.email.split('@')[0],
-      email: currentUser.email,
-      initials: (currentUser.displayName||currentUser.email).slice(0,2).toUpperCase(),
-      color: '#534AB7',
-      cap: 0
-    }],
-    motos: [],
-    movimientos: [],
-    nextId: 1
-  };
-  try {
-    const ref = window._doc(window._col(window._db,'pools'));
-    await window._set(ref, poolData);
-    closeOv('ovNewPool');
-    loadPools();
-  } catch(e) { alert('Error al crear el pool.'); }
-}
-
-// ── MIGRATE & SAVE ────────────────────────────────────────
-function migrate(d) {
-  if (!d) return {};
-  if (!d.members) d.members = [];
-  if (!d.motos) d.motos = [];
-  if (!d.movimientos) d.movimientos = [];
-  if (!d.nextId) d.nextId = 1;
-  d.motos.forEach(m => {
-    if (!m.extras) m.extras = {};
-    if (!m.extraCosts) m.extraCosts = [];
-    if (!m.participantes) m.participantes = d.members.map(i=>i.id);
-    d.members.forEach(i => { if (m.extras[i.id]===undefined) m.extras[i.id]=0; });
-    m.extraCosts.forEach(c => { if (!c.payer) c.payer=''; });
+// ── MIGRATE ───────────────────────────────────────────────
+function migrate(d){
+  if(!d)return{};
+  if(!d.members)d.members=[];
+  if(!d.motos)d.motos=[];
+  if(!d.movimientos)d.movimientos=[];
+  if(!d.nextId)d.nextId=1;
+  if(!d.authorizedEmails)d.authorizedEmails=[ADMIN_EMAIL];
+  // Migrar investors → members (datos viejos)
+  if(d.investors&&!d.members.length){
+    d.members=d.investors.map(i=>({...i,email:''}));
+    delete d.investors;
+  }
+  d.motos.forEach(m=>{
+    if(!m.extras)m.extras={};
+    if(!m.extraCosts)m.extraCosts=[];
+    if(!m.participantes)m.participantes=d.members.map(i=>i.id);
+    d.members.forEach(i=>{if(m.extras[i.id]===undefined)m.extras[i.id]=0;});
+    m.extraCosts.forEach(c=>{if(!c.payer)c.payer='';});
   });
   return d;
 }
 
-function schedSave() {
+// ── SAVE ──────────────────────────────────────────────────
+function schedSave(){
   pill('Guardando...','saving');
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try {
-      await window._set(window._doc(window._db,'pools',currentPoolId), JSON.parse(JSON.stringify(currentPool)));
+  saveTimer=setTimeout(async()=>{
+    try{
+      await window._set(window._doc(window._db,'pools',currentPoolId),JSON.parse(JSON.stringify(currentPool)));
       pill('✓ Sync','');
-    } catch(e) { pill('Error','error'); }
-  }, 800);
+    }catch(e){pill('Error','error');}
+  },800);
 }
 
+function pill(t,c){const e=document.getElementById('savePill');if(e){e.textContent=t;e.className='pill '+c;}}
+
 // ── HELPERS ───────────────────────────────────────────────
-const tod = () => new Date().toISOString().split('T')[0];
-const dys = (a,b) => Math.max(0, Math.round((new Date(b)-new Date(a))/86400000));
-const fmt = n => '$'+Math.round(n).toLocaleString('es-AR');
-const pct = n => (n*100).toFixed(1)+'%';
-const fD = d => { if(!d)return'-'; const[y,m,dd]=d.split('-'); return`${+dd} ${'ene feb mar abr may jun jul ago sep oct nov dic'.split(' ')[+m-1]} ${y}`; };
-const hld = d => { if(d<1)return'0d'; if(d<30)return`${d}d`; const mo=Math.floor(d/30),r=d%30; return r?`${mo}m ${r}d`:`${mo}m`; };
-const getMonth = d => d?d.slice(0,7):'';
-const getYear = d => d?d.slice(0,4):'';
+const tod=()=>new Date().toISOString().split('T')[0];
+const dys=(a,b)=>Math.max(0,Math.round((new Date(b)-new Date(a))/86400000));
+const fmt=n=>'$'+Math.round(n).toLocaleString('es-AR');
+const pct=n=>(n*100).toFixed(1)+'%';
+const fD=d=>{if(!d)return'-';const[y,m,dd]=d.split('-');return`${+dd} ${'ene feb mar abr may jun jul ago sep oct nov dic'.split(' ')[+m-1]} ${y}`;};
+const hld=d=>{if(d<1)return'0d';if(d<30)return`${d}d`;const mo=Math.floor(d/30),r=d%30;return r?`${mo}m ${r}d`:`${mo}m`;};
+const getMonth=d=>d?d.slice(0,7):'';
+const getYear=d=>d?d.slice(0,4):'';
 
 // ── MATH ──────────────────────────────────────────────────
-const P = () => currentPool;
-const members = () => (P().members||[]).filter(m=>!m.retired||(m.retiredAt&&dys(m.retiredAt,tod())<90));
-const mPartic = m => (m.participantes||P().members.map(i=>i.id));
-const repairTotal = m => (m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
-const effCost = m => m.cost + repairTotal(m);
-const buyExtrasTotal = m => Object.values(m.extras||{}).reduce((a,b)=>a+b,0);
-
-const motoBaseSh = (m, inv) => {
-  const parts = mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
-  const tot = parts.reduce((a,i)=>a+i.cap,0);
-  return tot>0 ? (inv.cap/tot) : (1/Math.max(1,parts.length));
+const P=()=>currentPool;
+const members=()=>(P().members||[]).filter(m=>!m.retired||(m.retiredAt&&dys(m.retiredAt,tod())<90));
+const mPartic=m=>(m.participantes||(P().members||[]).map(i=>i.id));
+const repairTotal=m=>(m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
+const effCost=m=>m.cost+repairTotal(m);
+const buyExtrasTotal=m=>Object.values(m.extras||{}).reduce((a,b)=>a+b,0);
+const motoBaseSh=(m,inv)=>{
+  const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
+  const tot=parts.reduce((a,i)=>a+i.cap,0);
+  return tot>0?(inv.cap/tot):(1/Math.max(1,parts.length));
 };
-
-const motoInvCost = (m, inv) => {
-  if (!mPartic(m).includes(inv.id)) return 0;
-  const basePool = m.cost - buyExtrasTotal(m);
-  const propPart = Math.max(0, basePool * motoBaseSh(m, inv));
-  const extraBuy = m.extras[inv.id]||0;
-  const repairs = (m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
-  return propPart + extraBuy + repairs;
+const motoInvCost=(m,inv)=>{
+  if(!mPartic(m).includes(inv.id))return 0;
+  const basePool=m.cost-buyExtrasTotal(m);
+  const propPart=Math.max(0,basePool*motoBaseSh(m,inv));
+  const extraBuy=m.extras[inv.id]||0;
+  const repairs=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+  return propPart+extraBuy+repairs;
 };
-
-const motoGain = m => m.sold ? m.netSale - effCost(m) : null;
-
-const invGainMoto = (m, inv) => {
-  if (!m.sold||!mPartic(m).includes(inv.id)) return 0;
-  const g = motoGain(m), totalInvParts = mPartic(m).reduce((a,id)=>{const i=P().members.find(x=>x.id===id);return a+(i?motoInvCost(m,i):0);},0);
-  return g*(totalInvParts>0?motoInvCost(m,inv)/totalInvParts:0);
+const motoGain=m=>m.sold?m.netSale-effCost(m):null;
+const invGainMoto=(m,inv)=>{
+  if(!m.sold||!mPartic(m).includes(inv.id))return 0;
+  const g=motoGain(m);
+  const totalInvP=mPartic(m).reduce((a,id)=>{const i=P().members.find(x=>x.id===id);return a+(i?motoInvCost(m,i):0);},0);
+  return g*(totalInvP>0?motoInvCost(m,inv)/totalInvP:0);
 };
-
-const invMovs = (inv, tipo) => (P().movimientos||[]).filter(mv=>mv.invId===inv.id&&(!tipo||mv.tipo===tipo));
-const invTotalRetirado = inv => invMovs(inv,'retiro').reduce((a,mv)=>a+mv.amt,0);
-const invTotalAportado = inv => invMovs(inv,'aporte').reduce((a,mv)=>a+mv.amt,0);
-const invTotalExtras = inv => (P().motos||[]).reduce((a,m)=>{
+const invMovs=(inv,tipo)=>(P().movimientos||[]).filter(mv=>mv.invId===inv.id&&(!tipo||mv.tipo===tipo));
+const invTotalRetirado=inv=>invMovs(inv,'retiro').reduce((a,mv)=>a+mv.amt,0);
+const invTotalAportado=inv=>invMovs(inv,'aporte').reduce((a,mv)=>a+mv.amt,0);
+const invTotalExtras=inv=>(P().motos||[]).reduce((a,m)=>{
   const eb=m.extras[inv.id]||0;
   const rep=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((s,c)=>s+c.amount,0);
   return a+eb+rep;
 },0);
-const invTotalInvested = inv => inv.cap + invTotalAportado(inv) + invTotalExtras(inv);
-const invTotalGains = inv => (P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+invGainMoto(m,inv),0);
-const invTotCap = inv => invTotalInvested(inv) + invTotalGains(inv) - invTotalRetirado(inv);
-const totCap = () => members().reduce((a,inv)=>a+invTotCap(inv),0);
+const invTotalInvested=inv=>inv.cap+invTotalAportado(inv)+invTotalExtras(inv);
+const invTotalGains=inv=>(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+invGainMoto(m,inv),0);
+const invTotCap=inv=>invTotalInvested(inv)+invTotalGains(inv)-invTotalRetirado(inv);
+const totCap=()=>members().reduce((a,inv)=>a+invTotCap(inv),0);
 
 // ── RENDER ────────────────────────────────────────────────
-function renderAll() { renderKPIs(); renderTab(); }
+function renderAll(){renderKPIs();renderTab();}
 
-function pill(t,c) { const e=document.getElementById('savePill'); if(e){e.textContent=t;e.className='pill '+c;} }
-
-function renderKPIs() {
+function renderKPIs(){
   const cap=totCap();
   const totalInv=members().reduce((a,inv)=>a+invTotalInvested(inv),0);
   const gain=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
   const roi=totalInv>0?gain/totalInv:0;
-  const dA=dys('2026-03-19',tod());
+  const startDate=(P().motos||[]).find(m=>m.buyDate)?.buyDate||'2026-03-19';
+  const dA=dys(startDate,tod());
   const mr=dA>0?roi/(dA/30):0;
   const capR=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+effCost(m),0);
   const roiR=capR>0?gain/capR:0;
   const mrR=dA>0?roiR/(dA/30):0;
-  const sold=(P().motos||[]).filter(m=>m.sold).length;
-  const act=(P().motos||[]).filter(m=>!m.sold).length;
+  const sold=(P().motos||[]).filter(m=>m.sold).length,act=(P().motos||[]).filter(m=>!m.sold).length;
   document.getElementById('kpiGrid').innerHTML=`
     <div class="kpi"><div class="kpi-lbl">Capital total</div><div class="kpi-val">${fmt(cap)}</div><div class="kpi-sub">Invertido ${fmt(totalInv)}</div></div>
     <div class="kpi"><div class="kpi-lbl">Ganancia realizada</div><div class="kpi-val up">${fmt(gain)}</div><div class="kpi-sub">${sold} venta${sold!==1?'s':''}</div></div>
-    <div class="kpi"><div class="kpi-lbl">ROI realizado</div><div class="kpi-val up">${pct(roiR)}</div><div class="kpi-sub">${pct(mrR)}/mes · ventas cerradas</div></div>
+    <div class="kpi"><div class="kpi-lbl">ROI realizado</div><div class="kpi-val up">${pct(roiR)}</div><div class="kpi-sub">${pct(mrR)}/mes</div></div>
     <div class="kpi"><div class="kpi-lbl">ROI total</div><div class="kpi-val">${pct(roi)}</div><div class="kpi-sub">${pct(mr)}/mes · ${act} en cartera</div></div>`;
 }
 
-function sw(t) {
+function sw(t){
   activeTab=t;
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   renderTab();
 }
 
-function renderTab() {
-  const el=document.getElementById('tabContent');
-  if(!el)return;
-  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});
-  charts={};
+function renderTab(){
+  const el=document.getElementById('tabContent');if(!el)return;
+  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});charts={};
   if(activeTab==='resumen') el.innerHTML=rResumen();
   else if(activeTab==='motos') el.innerHTML=rMotos();
   else if(activeTab==='socios') el.innerHTML=rSocios();
@@ -563,14 +558,15 @@ function renderTab() {
   else if(activeTab==='historial') el.innerHTML=rHistorial();
   else if(activeTab==='proyeccion'){el.innerHTML=rProyeccion();bindProj();}
   else if(activeTab==='simulador') el.innerHTML=rSimulador();
+  else if(activeTab==='admin') el.innerHTML=rAdmin();
   if(activeTab==='resumen') setTimeout(rEvoChart,100);
 }
 
 // ── RESUMEN ───────────────────────────────────────────────
-function rResumen() {
+function rResumen(){
   const cap=totCap();
   const rows=members().map(inv=>{
-    const c=invTotCap(inv),inv2=invTotalInvested(inv),g=invTotalGains(inv),ret=invTotalRetirado(inv);
+    const c=invTotCap(inv),inv2=invTotalInvested(inv),g=invTotalGains(inv);
     const r=inv2>0?g/inv2:0,sp=cap>0?c/cap:0;
     return`<div class="inv-row">
       <div class="av" style="width:36px;height:36px;font-size:12px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
@@ -593,9 +589,9 @@ function rResumen() {
     <div class="cw"><canvas id="evoChart"></canvas></div>`;
 }
 
-function rEvoChart() {
-  const ctx=document.getElementById('evoChart'); if(!ctx)return;
-  if(charts.evo){charts.evo.destroy();}
+function rEvoChart(){
+  const ctx=document.getElementById('evoChart');if(!ctx)return;
+  if(charts.evo)charts.evo.destroy();
   const labels=['Inicio'];
   const ds=members().map(inv=>({label:inv.name,data:[inv.cap],borderColor:inv.color,backgroundColor:inv.color+'18',tension:.4,fill:false,pointRadius:4,pointBackgroundColor:inv.color,borderWidth:2}));
   let run=members().map(i=>i.cap);
@@ -609,8 +605,8 @@ function rEvoChart() {
 }
 
 // ── MOTOS ─────────────────────────────────────────────────
-function rMotos() {
-  const sold=(P().motos||[]).filter(m=>m.sold), act=(P().motos||[]).filter(m=>!m.sold), td=tod();
+function rMotos(){
+  const sold=(P().motos||[]).filter(m=>m.sold),act=(P().motos||[]).filter(m=>!m.sold),td=tod();
   let html='';
   if(sold.length){
     html+=`<div class="slbl">Vendidas</div>`;
@@ -660,11 +656,16 @@ function rMotos() {
 }
 
 // ── SOCIOS ────────────────────────────────────────────────
-function rSocios() {
+function rSocios(){
+  const startDate=(P().motos||[]).find(m=>m.buyDate)?.buyDate||'2026-03-19';
+  const dA=dys(startDate,tod());
   return members().map(inv=>{
     const c=invTotCap(inv),inv2=invTotalInvested(inv),g=invTotalGains(inv),ret=invTotalRetirado(inv);
     const extras=invTotalExtras(inv),aportes=invTotalAportado(inv);
     const sold=(P().motos||[]).filter(m=>m.sold&&mPartic(m).includes(inv.id));
+    const capR=sold.reduce((a,m)=>a+motoInvCost(m,inv),0);
+    const rReal=capR>0?g/capR:0,mrReal=dA>0?rReal/(dA/30):0;
+    const rTot=inv2>0?g/inv2:0,mrTot=dA>0?rTot/(dA/30):0;
     const motoRowsHTML=sold.map(m=>{
       const d=dys(m.buyDate,m.saleDate),invG=invGainMoto(m,inv),invC=motoInvCost(m,inv);
       const mRoi=invC>0?invG/invC:0,mRoiM=d>0?mRoi/(d/30):0;
@@ -679,11 +680,6 @@ function rSocios() {
         </div>
       </div>`;
     }).join('');
-    const dA=dys('2026-03-19',tod());
-    const capR=sold.reduce((a,m)=>a+motoInvCost(m,inv),0);
-    const rReal=capR>0?g/capR:0,mrReal=dA>0?rReal/(dA/30):0;
-    const rTot=inv2>0?g/inv2:0,mrTot=dA>0?rTot/(dA/30):0;
-    const detailId=`detail_${inv.id}`;
     return`<div class="card">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
         <div class="av" style="width:44px;height:44px;font-size:15px;background:${inv.color}22;color:${inv.color}">${inv.initials}</div>
@@ -704,137 +700,78 @@ function rSocios() {
           <span style="font-size:12px;font-weight:600;color:var(--purple)">Ver ROI detallado y motos</span>
           <span class="arrow">▼</span>
         </div>
-        <div class="detail-panel" id="${detailId}">
+        <div class="detail-panel" id="detail_${inv.id}">
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:10px 0 6px">ROI</div>
           <div class="cr" style="border-top:none"><span class="crl">ROI realizado</span><span class="crg">${pct(rReal)}</span></div>
           <div class="cr"><span class="crl">ROI realizado mensual</span><span class="crg">${pct(mrReal)}/mes</span></div>
           <div class="cr"><span class="crl">ROI total</span><span class="crg">${pct(rTot)}</span></div>
           <div class="cr"><span class="crl">ROI total mensual</span><span class="crg">${pct(mrTot)}/mes</span></div>
-          ${sold.length?`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:12px 0 6px">Motos vendidas</div>
-          <div onclick="void(0)">${motoRowsHTML}</div>`:''}
+          ${sold.length?`<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:12px 0 6px">Motos vendidas</div>${motoRowsHTML}`:''}
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function toggleDetail(id) {
-  const panel=document.getElementById(`detail_${id}`);
-  const tog=document.getElementById(`tog_${id}`);
-  panel.classList.toggle('open');
-  tog.classList.toggle('open');
+function toggleDetail(id){
+  document.getElementById(`detail_${id}`).classList.toggle('open');
+  document.getElementById(`tog_${id}`).classList.toggle('open');
 }
 
 // ── RENDIMIENTO ───────────────────────────────────────────
-function rRendimiento() {
+function rRendimiento(){
   const sold=(P().motos||[]).filter(m=>m.sold);
-  if(!sold.length) return`<div class="slbl">Rendimiento</div><p style="font-size:13px;color:var(--muted)">No hay motos vendidas todavía.</p>`;
-
-  // Por moto
+  if(!sold.length)return`<div class="slbl">Rendimiento</div><p style="font-size:13px;color:var(--muted)">No hay motos vendidas todavía.</p>`;
   const motoRows=sold.map(m=>{
     const g=motoGain(m),ec=effCost(m),d=dys(m.buyDate,m.saleDate),gpd=g/d,mroi=(gpd*30)/ec;
-    return`<tr>
-      <td style="padding:7px 4px 7px 0;font-size:12px">${m.name.split(' ').slice(0,3).join(' ')}</td>
-      <td style="padding:7px 4px;font-size:12px;text-align:right">${hld(d)}</td>
-      <td style="padding:7px 4px;font-size:12px;text-align:right;color:${g>=0?'var(--green)':'var(--red)'}">+${fmt(g)}</td>
-      <td style="padding:7px 0 7px 4px;font-size:12px;text-align:right;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</td>
-    </tr>`;
+    return`<tr><td style="padding:7px 4px 7px 0;font-size:12px">${m.name.split(' ').slice(0,3).join(' ')}</td><td style="padding:7px 4px;font-size:12px;text-align:right">${hld(d)}</td><td style="padding:7px 4px;font-size:12px;text-align:right;color:${g>=0?'var(--green)':'var(--red)'}">+${fmt(g)}</td><td style="padding:7px 0;font-size:12px;text-align:right;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</td></tr>`;
   }).join('');
-
-  // Por mes
   const byMonth={};
-  sold.forEach(m=>{
-    const mo=getMonth(m.saleDate);
-    if(!byMonth[mo]) byMonth[mo]={gain:0,count:0};
-    byMonth[mo].gain+=motoGain(m)||0;
-    byMonth[mo].count++;
-  });
-  const monthRows=Object.entries(byMonth).sort((a,b)=>a[0]>b[0]?1:-1).map(([mo,d])=>`<tr>
-    <td style="padding:7px 0;font-size:12px">${mo}</td>
-    <td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td>
-    <td style="padding:7px 0;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td>
-  </tr>`).join('');
-
-  // Por año
+  sold.forEach(m=>{const mo=getMonth(m.saleDate);if(!byMonth[mo])byMonth[mo]={gain:0,count:0};byMonth[mo].gain+=motoGain(m)||0;byMonth[mo].count++;});
+  const monthRows=Object.entries(byMonth).sort((a,b)=>a[0]>b[0]?1:-1).map(([mo,d])=>`<tr><td style="padding:7px 0;font-size:12px">${mo}</td><td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td><td style="padding:7px 0;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td></tr>`).join('');
   const byYear={};
-  sold.forEach(m=>{
-    const yr=getYear(m.saleDate);
-    if(!byYear[yr]) byYear[yr]={gain:0,count:0,invested:0};
-    byYear[yr].gain+=motoGain(m)||0;
-    byYear[yr].count++;
-    byYear[yr].invested+=effCost(m);
-  });
-  const yearRows=Object.entries(byYear).sort().map(([yr,d])=>{
-    const roi=d.invested>0?d.gain/d.invested:0;
-    return`<tr>
-      <td style="padding:7px 0;font-size:12px">${yr}</td>
-      <td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td>
-      <td style="padding:7px 4px;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td>
-      <td style="padding:7px 0;font-size:12px;text-align:right;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</td>
-    </tr>`;
-  }).join('');
-
+  sold.forEach(m=>{const yr=getYear(m.saleDate);if(!byYear[yr])byYear[yr]={gain:0,count:0,invested:0};byYear[yr].gain+=motoGain(m)||0;byYear[yr].count++;byYear[yr].invested+=effCost(m);});
+  const yearRows=Object.entries(byYear).sort().map(([yr,d])=>{const roi=d.invested>0?d.gain/d.invested:0;return`<tr><td style="padding:7px 0;font-size:12px">${yr}</td><td style="padding:7px 4px;font-size:12px;text-align:center">${d.count} venta${d.count!==1?'s':''}</td><td style="padding:7px 4px;font-size:12px;text-align:right;color:${d.gain>=0?'var(--green)':'var(--red)'}">+${fmt(d.gain)}</td><td style="padding:7px 0;font-size:12px;text-align:right;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</td></tr>`;}).join('');
   return`
     <div class="slbl">Por moto vendida</div>
-    <div class="card">
-      <table class="roi-table">
-        <thead><tr><th>Moto</th><th style="text-align:right">Tiempo</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI/mes</th></tr></thead>
-        <tbody>${motoRows}</tbody>
-      </table>
-    </div>
+    <div class="card"><table class="roi-table"><thead><tr><th>Moto</th><th style="text-align:right">Tiempo</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI/mes</th></tr></thead><tbody>${motoRows}</tbody></table></div>
     <div class="slbl mt">Por mes</div>
-    <div class="card">
-      <table class="roi-table">
-        <thead><tr><th>Mes</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th></tr></thead>
-        <tbody>${monthRows}</tbody>
-      </table>
-    </div>
+    <div class="card"><table class="roi-table"><thead><tr><th>Mes</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th></tr></thead><tbody>${monthRows}</tbody></table></div>
     <div class="slbl mt">Por año</div>
-    <div class="card">
-      <table class="roi-table">
-        <thead><tr><th>Año</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI</th></tr></thead>
-        <tbody>${yearRows}</tbody>
-      </table>
-    </div>`;
+    <div class="card"><table class="roi-table"><thead><tr><th>Año</th><th style="text-align:center">Ventas</th><th style="text-align:right">Ganancia</th><th style="text-align:right">ROI</th></tr></thead><tbody>${yearRows}</tbody></table></div>`;
 }
 
 // ── TRANSFERENCIAS ────────────────────────────────────────
-function rTransferencias() {
+function rTransferencias(){
   const movs=(P().movimientos||[]);
-  const tiposHTML=`
+  let histHTML=movs.length?[...movs].sort((a,b)=>b.fecha>a.fecha?1:-1).map(mv=>{
+    const inv=P().members.find(i=>i.id===mv.invId);
+    const to=mv.toInvId?P().members.find(i=>i.id===mv.toInvId):null;
+    const icons={retiro:'💸',aporte:'💵'};
+    return`<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+      <div>
+        <div class="mov-badge" style="background:${mv.tipo==='retiro'?'#FCEBEB':'#EEEDFE'};color:${mv.tipo==='retiro'?'var(--red)':'var(--purple)'}">${icons[mv.tipo]||'📋'} ${mv.tipo==='retiro'?'Retiro':'Aporte'}</div>
+        <div style="font-size:13px;font-weight:500;margin-top:3px">${inv?.name||mv.invId}${to?' → '+to.name:''}</div>
+        ${mv.nota?`<div style="font-size:12px;color:var(--muted)">${mv.nota}</div>`:''}
+        <div style="font-size:11px;color:var(--muted)">${fD(mv.fecha)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:700;color:${mv.tipo==='retiro'?'var(--red)':'var(--green)'}">${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}</div>
+        <button class="btn-sm btn-ds" style="margin-top:4px" onclick="delTransfer('${mv.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join(''):`<p style="font-size:13px;color:var(--muted)">No hay transferencias registradas.</p>`;
+  return`
+    <div class="slbl">Nueva transferencia</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       <button class="btn btn-r" onclick="openTransfer('retiro')">💸 Retiro / Traspaso de participación</button>
       <button class="btn btn-p" onclick="openTransfer('aporte')">💵 Aporte de capital adicional</button>
-    </div>`;
-  let histHTML='';
-  if(movs.length){
-    const sorted=[...movs].sort((a,b)=>b.fecha>a.fecha?1:-1);
-    histHTML=sorted.map(mv=>{
-      const inv=P().members.find(i=>i.id===mv.invId);
-      const icons={retiro:'💸',aporte:'💵',traspaso:'🔄'};
-      const labels={retiro:'Retiro',aporte:'Aporte',traspaso:'Traspaso'};
-      return`<div class="mov-item">
-        <div>
-          <div class="mov-badge" style="background:${mv.tipo==='retiro'?'#FCEBEB':mv.tipo==='aporte'?'#EEEDFE':'#EAF3DE'};color:${mv.tipo==='retiro'?'var(--red)':mv.tipo==='aporte'?'var(--purple)':'var(--green)'}">${icons[mv.tipo]||'📋'} ${labels[mv.tipo]||mv.tipo}</div>
-          <div style="font-size:13px;font-weight:500;margin-top:3px">${inv?.name||mv.invId}${mv.toInvId?` → ${P().members.find(i=>i.id===mv.toInvId)?.name||mv.toInvId}`:''}</div>
-          ${mv.nota?`<div style="font-size:12px;color:var(--muted)">${mv.nota}</div>`:''}
-          <div style="font-size:11px;color:var(--muted)">${fD(mv.fecha)}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:15px;font-weight:700;color:${mv.tipo==='retiro'?'var(--red)':'var(--green)'}">${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}</div>
-          <button class="btn-sm btn-ds" style="margin-top:4px" onclick="delTransfer('${mv.id}')">✕</button>
-        </div>
-      </div>`;
-    }).join('');
-  } else { histHTML=`<p style="font-size:13px;color:var(--muted)">No hay transferencias registradas.</p>`; }
-  return`
-    <div class="slbl">Nueva transferencia</div>
-    ${tiposHTML}
+    </div>
     <div class="slbl mt">Historial</div>
     <div class="card">${histHTML}</div>`;
 }
 
-function openTransfer(tipo) {
+function openTransfer(tipo){
   const el=document.getElementById('transferBody');
   if(tipo==='aporte'){
     document.getElementById('transferTitle').textContent='💵 Aporte de capital';
@@ -842,45 +779,35 @@ function openTransfer(tipo) {
       <div class="fg"><label>Socio que aporta</label><select id="tInv">${members().map(i=>`<option value="${i.id}">${i.name}</option>`).join('')}</select></div>
       <div class="fg"><label>Monto (USD)</label><input type="number" id="tAmt" placeholder="0" min="0"></div>
       <div class="fg"><label>Fecha</label><input type="date" id="tFecha" value="${tod()}"></div>
-      <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota" placeholder="Ej: Aporte para nueva moto"></div>
+      <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota"></div>
       <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doAporte()">Registrar</button></div>`;
   } else {
     document.getElementById('transferTitle').textContent='💸 Retiro / Traspaso';
     const mAct=(P().motos||[]).filter(m=>!m.sold);
     const mOpts=`<option value="todas">Todas las motos activas</option>`+mAct.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
     el.innerHTML=`
-      <div class="fg"><label>Socio que retira</label><select id="tInvFrom" onchange="updateRetiroAmt()">${members().map(i=>`<option value="${i.id}">${i.name} (Capital: ${fmt(invTotCap(i))})</option>`).join('')}</select></div>
-      <div class="fg"><label>¿Retiro total o parcial?</label>
-        <select id="tRetiroTipo" onchange="updateRetiroAmt()">
-          <option value="total">Total (retira todo)</option>
-          <option value="parcial">Parcial (especificar monto)</option>
-        </select>
-      </div>
-      <div class="fg" id="fgAmt" style="display:none"><label>Monto a retirar (USD)</label><input type="number" id="tAmt" placeholder="0" min="0"></div>
-      <div id="fgAmtTotal" style="font-size:13px;color:var(--muted);margin-bottom:14px" ></div>
+      <div class="fg"><label>Socio que retira</label><select id="tInvFrom" onchange="updateRetiroAmt()">${members().map(i=>`<option value="${i.id}">${i.name} (${fmt(invTotCap(i))})</option>`).join('')}</select></div>
+      <div class="fg"><label>Tipo de retiro</label><select id="tRetiroTipo" onchange="updateRetiroAmt()"><option value="total">Total</option><option value="parcial">Parcial</option></select></div>
+      <div class="fg" id="fgAmt" style="display:none"><label>Monto (USD)</label><input type="number" id="tAmt" placeholder="0" min="0"></div>
+      <div id="fgAmtTotal" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
       <div class="fg"><label>¿En qué motos?</label><select id="tMotos">${mOpts}</select></div>
       <div class="fg"><label>¿Quién suplanta? (obligatorio)</label>
         <select id="tInvTo">
           <option value="">-- Seleccionar --</option>
-          <option value="nuevo">+ Agregar nuevo socio</option>
-          ${members().map(i=>`<option value="${i.id}">${i.name} (socio existente)</option>`).join('')}
+          <option value="nuevo">+ Nuevo socio</option>
+          ${members().map(i=>`<option value="${i.id}">${i.name} (existente)</option>`).join('')}
         </select>
       </div>
       <div id="fgNuevoSocio" style="display:none">
-        <div class="fg"><label>Nombre del nuevo socio</label><input type="text" id="tNuevoNombre" placeholder="Nombre completo"></div>
-        <div class="fg"><label>Email (para acceso al pool)</label><input type="email" id="tNuevoEmail" placeholder="email@ejemplo.com"></div>
+        <div class="fg"><label>Nombre</label><input type="text" id="tNuevoNombre"></div>
+        <div class="fg"><label>Email de Google</label><input type="email" id="tNuevoEmail" placeholder="email@gmail.com"></div>
         <div class="fg"><label>Color</label><input type="color" id="tNuevoColor" value="#185FA5"></div>
       </div>
-      <div class="fg"><label>Precio de la participación (USD)</label>
-        <input type="number" id="tPrecio" placeholder="0" min="0">
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Puede ser igual al capital o negociado entre las partes.</div>
-      </div>
+      <div class="fg"><label>Precio de la participación (USD)</label><input type="number" id="tPrecio" placeholder="0" min="0"><div style="font-size:11px;color:var(--muted);margin-top:4px">Puede ser exacto o negociado.</div></div>
       <div class="fg"><label>Fecha</label><input type="date" id="tFecha" value="${tod()}"></div>
       <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota"></div>
-      <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doRetiro()">Confirmar retiro</button></div>`;
-    document.getElementById('tInvTo').addEventListener('change',function(){
-      document.getElementById('fgNuevoSocio').style.display=this.value==='nuevo'?'block':'none';
-    });
+      <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doRetiro()">Confirmar</button></div>`;
+    document.getElementById('tInvTo').addEventListener('change',function(){document.getElementById('fgNuevoSocio').style.display=this.value==='nuevo'?'block':'none';});
     updateRetiroAmt();
   }
   openOv('ovTransfer');
@@ -891,14 +818,12 @@ function updateRetiroAmt(){
   const tipo=document.getElementById('tRetiroTipo')?.value;
   const inv=P().members.find(i=>i.id===invId);
   const cap=inv?invTotCap(inv):0;
-  const fgAmt=document.getElementById('fgAmt');
-  const fgTotal=document.getElementById('fgAmtTotal');
   if(tipo==='total'){
-    if(fgAmt) fgAmt.style.display='none';
-    if(fgTotal) fgTotal.textContent=`Monto a retirar: ${fmt(cap)}`;
+    document.getElementById('fgAmt').style.display='none';
+    document.getElementById('fgAmtTotal').textContent=`Monto a retirar: ${fmt(cap)}`;
   } else {
-    if(fgAmt) fgAmt.style.display='block';
-    if(fgTotal) fgTotal.textContent='';
+    document.getElementById('fgAmt').style.display='block';
+    document.getElementById('fgAmtTotal').textContent='';
   }
 }
 
@@ -910,7 +835,7 @@ function doAporte(){
   if(!invId||isNaN(amt)||amt<=0||!fecha){alert('Completá todos los campos.');return;}
   const inv=P().members.find(i=>i.id===invId);
   if(inv) inv.cap+=amt;
-  if(!P().movimientos) P().movimientos=[];
+  if(!P().movimientos)P().movimientos=[];
   P().movimientos.push({id:'mv'+Date.now(),invId,tipo:'aporte',amt,fecha,nota});
   schedSave();closeOv('ovTransfer');renderAll();
 }
@@ -923,66 +848,34 @@ function doRetiro(){
   const precio=parseFloat(document.getElementById('tPrecio').value)||0;
   const fecha=document.getElementById('tFecha').value;
   const nota=document.getElementById('tNota').value.trim();
-  if(!toId){alert('Seleccioná quién suplanta la participación.');return;}
+  if(!toId){alert('Seleccioná quién suplanta.');return;}
   const fromInv=P().members.find(i=>i.id===fromId);
   const capFrom=invTotCap(fromInv);
   const amt=retiroTipo==='total'?capFrom:parseFloat(document.getElementById('tAmt').value)||0;
   if(amt<=0){alert('Ingresá un monto válido.');return;}
-
-  // Si es socio nuevo, crearlo
   let toInv=P().members.find(i=>i.id===toId);
   if(toId==='nuevo'){
     const nombre=document.getElementById('tNuevoNombre').value.trim();
     const email=document.getElementById('tNuevoEmail').value.trim();
     const color=document.getElementById('tNuevoColor').value;
-    if(!nombre||!email){alert('Ingresá nombre y email del nuevo socio.');return;}
+    if(!nombre||!email){alert('Ingresá nombre y email.');return;}
     const newId='inv'+Date.now();
     toInv={id:newId,name:nombre,email,initials:nombre.slice(0,2).toUpperCase(),color,cap:0};
     P().members.push(toInv);
-    if(!P().memberEmails) P().memberEmails=[];
-    P().memberEmails.push(email);
+    if(!P().authorizedEmails)P().authorizedEmails=[];
+    P().authorizedEmails.push(email);
   }
-
-  // Reasignar participación en motos
-  const motosAfectadas = motoScope==='todas'
-    ? (P().motos||[]).filter(m=>!m.sold&&mPartic(m).includes(fromId))
-    : (P().motos||[]).filter(m=>m.id===motoScope);
-
+  const motosAfectadas=motoScope==='todas'?(P().motos||[]).filter(m=>!m.sold&&mPartic(m).includes(fromId)):(P().motos||[]).filter(m=>m.id===motoScope);
   motosAfectadas.forEach(m=>{
-    // Agregar nuevo socio a participantes si no está
-    if(!mPartic(m).includes(toInv.id)){
-      m.participantes=[...mPartic(m),toInv.id];
-      m.extras[toInv.id]=0;
-    }
-    // Transferir aporte extra proporcional
+    if(!mPartic(m).includes(toInv.id)){m.participantes=[...mPartic(m),toInv.id];m.extras[toInv.id]=0;}
     const extraFrom=m.extras[fromId]||0;
-    if(retiroTipo==='total'){
-      m.extras[toInv.id]=(m.extras[toInv.id]||0)+extraFrom;
-      m.extras[fromId]=0;
-      m.participantes=m.participantes.filter(id=>id!==fromId);
-    } else {
-      // Transferencia parcial proporcional
-      const ratio=amt/capFrom;
-      const extraTransfer=extraFrom*ratio;
-      m.extras[toInv.id]=(m.extras[toInv.id]||0)+extraTransfer;
-      m.extras[fromId]=extraFrom-extraTransfer;
-    }
+    if(retiroTipo==='total'){m.extras[toInv.id]=(m.extras[toInv.id]||0)+extraFrom;m.extras[fromId]=0;m.participantes=m.participantes.filter(id=>id!==fromId);}
+    else{const ratio=amt/capFrom;const et=extraFrom*ratio;m.extras[toInv.id]=(m.extras[toInv.id]||0)+et;m.extras[fromId]=extraFrom-et;}
   });
-
-  // Ajustar cap del socio entrante con el precio pagado
   toInv.cap+=precio;
-
-  // Marcar retiro en el socio saliente
-  if(retiroTipo==='total'){
-    fromInv.retired=true;
-    fromInv.retiredAt=fecha;
-    fromInv.cap=0;
-  } else {
-    fromInv.cap=Math.max(0,fromInv.cap-amt);
-  }
-
-  // Registrar movimiento
-  if(!P().movimientos) P().movimientos=[];
+  if(retiroTipo==='total'){fromInv.retired=true;fromInv.retiredAt=fecha;fromInv.cap=0;}
+  else{fromInv.cap=Math.max(0,fromInv.cap-amt);}
+  if(!P().movimientos)P().movimientos=[];
   P().movimientos.push({id:'mv'+Date.now(),invId:fromId,toInvId:toInv.id,tipo:'retiro',amt,precio,fecha,nota,motoScope});
   schedSave();closeOv('ovTransfer');renderAll();
 }
@@ -993,22 +886,76 @@ function delTransfer(id){
   schedSave();renderAll();
 }
 
+// ── ADMIN ─────────────────────────────────────────────────
+function rAdmin(){
+  if(!isAdmin())return`<p style="font-size:13px;color:var(--muted)">Sin acceso.</p>`;
+  const authorized=(P().authorizedEmails||[]);
+  const rows=authorized.map(email=>`
+    <div class="access-row">
+      <div>
+        <div style="font-size:13px;font-weight:500">${email}</div>
+        ${email===ADMIN_EMAIL?'<span style="font-size:11px;color:var(--purple)">Administrador</span>':''}
+      </div>
+      ${email!==ADMIN_EMAIL?`<button class="btn-sm btn-ds" onclick="revokeAccess('${email}')">Revocar acceso</button>`:''}
+    </div>`).join('');
+  return`
+    <div class="slbl">⚙️ Panel de administración</div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Usuarios con acceso</div>
+      ${rows||'<p style="font-size:13px;color:var(--muted)">No hay usuarios autorizados.</p>'}
+    </div>
+    <div class="slbl mt">Agregar acceso</div>
+    <div class="card">
+      <div class="fg"><label>Email de Google del usuario</label><input type="email" id="newAccessEmail" placeholder="email@gmail.com"></div>
+      <button class="btn btn-p" onclick="grantAccess()">Dar acceso</button>
+    </div>
+    <div class="slbl mt">Pool</div>
+    <div class="card">
+      <div class="fg"><label>Nombre del pool</label><input type="text" id="adminPoolName" value="${P().name||''}"></div>
+      <div class="fg"><label>Descripción</label><input type="text" id="adminPoolDesc" value="${P().desc||''}"></div>
+      <button class="btn btn-p" onclick="savePoolMeta()">Guardar</button>
+    </div>`;
+}
+
+async function grantAccess(){
+  if(!isAdmin())return;
+  const email=document.getElementById('newAccessEmail').value.trim().toLowerCase();
+  if(!email){alert('Ingresá un email válido.');return;}
+  if((P().authorizedEmails||[]).includes(email)){alert('Este usuario ya tiene acceso.');return;}
+  if(!P().authorizedEmails)P().authorizedEmails=[];
+  P().authorizedEmails.push(email);
+  schedSave();renderTab();
+  alert(`✓ Acceso otorgado a ${email}. La próxima vez que ingrese con Google verá este pool.`);
+}
+
+async function revokeAccess(email){
+  if(!isAdmin())return;
+  if(!confirm(`¿Revocar acceso a ${email}?`))return;
+  P().authorizedEmails=(P().authorizedEmails||[]).filter(e=>e!==email);
+  schedSave();renderTab();
+}
+
+function savePoolMeta(){
+  P().name=document.getElementById('adminPoolName').value.trim();
+  P().desc=document.getElementById('adminPoolDesc').value.trim();
+  document.getElementById('poolNameHdr').textContent='🏍️ '+P().name;
+  schedSave();alert('✓ Guardado.');
+}
+
 // ── HISTORIAL ─────────────────────────────────────────────
 function rHistorial(){
   const ev=[];
-  const startDate=(P().motos||[]).length?(P().motos[0].buyDate||tod()):tod();
+  const startDate=(P().motos||[]).find(m=>m.buyDate)?.buyDate||tod();
   ev.push({date:startDate,label:'Inicio del pool',sub:`${P().name} · ${members().length} socios`,color:'#534AB7',icon:'🚀'});
   (P().motos||[]).forEach(m=>{
-    ev.push({date:m.buyDate,label:`Compra: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Costo ${fmt(m.cost)} · ${mPartic(m).map(id=>P().members.find(i=>i.id===id)?.name).filter(Boolean).join(', ')}`,color:'#185FA5',icon:'🛒'});
+    ev.push({date:m.buyDate,label:`Compra: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Costo ${fmt(m.cost)}`,color:'#185FA5',icon:'🛒'});
     (m.extraCosts||[]).forEach(c=>{const pName=c.payer?P().members.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';ev.push({date:c.date,label:`Gasto: ${c.desc}`,sub:`${m.name.split(' ').slice(0,2).join(' ')} · -${fmt(c.amount)} · ${pName}`,color:'#854F0B',icon:'🔧'});});
-    if(m.sold) ev.push({date:m.saleDate,label:`Venta: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Ganancia ${fmt(motoGain(m))}`,color:'#3B6D11',icon:'💰'});
+    if(m.sold)ev.push({date:m.saleDate,label:`Venta: ${m.name.split(' ').slice(0,3).join(' ')}`,sub:`Ganancia ${fmt(motoGain(m))}`,color:'#3B6D11',icon:'💰'});
   });
   (P().movimientos||[]).forEach(mv=>{
     const inv=P().members.find(i=>i.id===mv.invId);
     const to=mv.toInvId?P().members.find(i=>i.id===mv.toInvId):null;
-    const icons={retiro:'💸',aporte:'💵'};
-    const labels={retiro:'Retiro',aporte:'Aporte'};
-    ev.push({date:mv.fecha,label:`${labels[mv.tipo]||mv.tipo}: ${inv?.name||mv.invId}${to?' → '+to.name:''}`,sub:`${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}${mv.nota?' · '+mv.nota:''}`,color:mv.tipo==='retiro'?'#A32D2D':'#534AB7',icon:icons[mv.tipo]||'📋'});
+    ev.push({date:mv.fecha,label:`${mv.tipo==='retiro'?'Retiro':'Aporte'}: ${inv?.name||mv.invId}${to?' → '+to.name:''}`,sub:`${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}${mv.nota?' · '+mv.nota:''}`,color:mv.tipo==='retiro'?'#A32D2D':'#534AB7',icon:mv.tipo==='retiro'?'💸':'💵'});
   });
   ev.sort((a,b)=>a.date>b.date?1:-1);
   const items=ev.map((e,i)=>`<div class="tli"><div class="tldc"><div class="tld" style="background:${e.color}"></div>${i<ev.length-1?'<div class="tll"></div>':''}</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${e.icon} ${e.label}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${fD(e.date)} · ${e.sub}</div></div></div>`).join('');
@@ -1017,7 +964,7 @@ function rHistorial(){
 
 // ── PROYECCIÓN ────────────────────────────────────────────
 function rProyeccion(){
-  const cap=totCap(),dA=dys((P().motos&&P().motos[0]?.buyDate)||'2026-03-19',tod());
+  const cap=totCap(),startDate=(P().motos||[]).find(m=>m.buyDate)?.buyDate||'2026-03-19',dA=dys(startDate,tod());
   const totalInv=members().reduce((a,inv)=>a+invTotalInvested(inv),0);
   const gain=(P().motos||[]).filter(m=>m.sold).reduce((a,m)=>a+(motoGain(m)||0),0);
   const avgMr=dA>0&&totalInv>0?(gain/totalInv)/(dA/30):0.05;
@@ -1025,7 +972,7 @@ function rProyeccion(){
   return`
     <div class="slbl">Proyección de capital</div>
     <div class="card" style="margin-bottom:12px">
-      <div class="cr" style="border-top:none"><span class="crl">Capital base actual</span><span class="crv">${fmt(cap)}</span></div>
+      <div class="cr" style="border-top:none"><span class="crl">Capital base</span><span class="crv">${fmt(cap)}</span></div>
       <div class="cr"><span class="crl">ROI mensual realizado</span><span class="crg">${pct(avgMr)}/mes</span></div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -1047,7 +994,7 @@ function rProyeccion(){
 }
 
 function bindProj(){
-  const sl=document.getElementById('projRate'); if(!sl)return;
+  const sl=document.getElementById('projRate');if(!sl)return;
   const upd=()=>{
     const r=parseInt(sl.value)/100;
     document.getElementById('projRateOut').textContent=`${parseInt(sl.value)}%`;
@@ -1056,16 +1003,15 @@ function bindProj(){
     const act=(P().motos||[]).filter(m=>!m.sold);
     document.getElementById('projMotos').innerHTML=act.length?act.map(m=>{
       const ec=effCost(m);
-      const sc=[{l:'Pesimista',mult:.9,c:'var(--red)'},{l:'Esperado',mult:1.15,c:'var(--amber)'},{l:'Optimista',mult:1.3,c:'var(--green)'}];
       return`<div class="card"><div style="font-size:13px;font-weight:600;margin-bottom:8px">${m.name}</div>
         <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
         <div class="cr"><span class="crl">Break-even (con 10%)</span><span class="crv">${fmt(ec/0.9)}</span></div>
         <div style="font-size:11px;color:var(--muted);margin:8px 0 2px">Escenarios:</div>
-        ${sc.map(s=>{const v=ec*s.mult,n=v*0.9,g=n-ec;return`<div class="cr"><span class="crl">${s.l} (${fmt(v)})</span><span style="font-weight:600;color:${s.c}">${g>=0?'+':''}${fmt(g)} (${pct(g/ec)})</span></div>`;}).join('')}
+        ${[{l:'Pesimista',mult:.9,c:'var(--red)'},{l:'Esperado',mult:1.15,c:'var(--amber)'},{l:'Optimista',mult:1.3,c:'var(--green)'}].map(s=>{const v=ec*s.mult,n=v*0.9,g=n-ec;return`<div class="cr"><span class="crl">${s.l} (${fmt(v)})</span><span style="font-weight:600;color:${s.c}">${g>=0?'+':''}${fmt(g)} (${pct(g/ec)})</span></div>`;}).join('')}
       </div>`;
     }).join(''):`<p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
   };
-  sl.addEventListener('input',upd); upd();
+  sl.addEventListener('input',upd);upd();
 }
 
 function calcMeta(){
@@ -1074,8 +1020,7 @@ function calcMeta(){
   if(!meta||meta<=0){document.getElementById('metaResult').textContent='Ingresá un monto válido.';return;}
   const cap=totCap();
   if(meta<=cap){document.getElementById('metaResult').innerHTML=`<span style="color:var(--green);font-weight:600">✓ Ya superás esa meta. Capital: ${fmt(cap)}.</span>`;return;}
-  const r=parseInt(sl.value)/100;
-  let meses=0,c=cap;
+  const r=parseInt(sl.value)/100;let meses=0,c=cap;
   while(c<meta&&meses<600){c*=(1+r);meses++;}
   const años=Math.floor(meses/12),mesRest=meses%12;
   const str=años>0?(mesRest>0?`${años} año${años>1?'s':''} y ${mesRest} mes${mesRest>1?'es':''}`:`${años} año${años>1?'s':''}`):`${meses} mes${meses>1?'es':''}`;
@@ -1085,7 +1030,7 @@ function calcMeta(){
 // ── SIMULADOR ─────────────────────────────────────────────
 function rSimulador(){
   const act=(P().motos||[]).filter(m=>!m.sold);
-  if(!act.length) return`<div class="slbl">Simulador</div><p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
+  if(!act.length)return`<div class="slbl">Simulador</div><p style="font-size:13px;color:var(--muted)">No hay motos en cartera.</p>`;
   const opts=act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   const cOpts=`<option value="">-- No comparar --</option>`+act.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   return`
@@ -1097,44 +1042,25 @@ function rSimulador(){
         <div class="fg" style="margin-bottom:0"><label>Esperado ($)</label><input type="number" id="simP2" placeholder="0" min="0"></div>
         <div class="fg" style="margin-bottom:0"><label>Optimista ($)</label><input type="number" id="simP3" placeholder="0" min="0"></div>
       </div>
-      <div class="fg" style="margin-top:12px"><label>% comisión</label><input type="number" id="simComm" value="10" min="0" max="100"></div>
+      <div class="fg" style="margin-top:12px"><label>% comisión</label><input type="number" id="simComm" value="10"></div>
       <div class="fg"><label>Fecha estimada de venta</label><input type="date" id="simFechaVenta"></div>
       <div class="fg"><label>Comparar con otra moto</label><select id="simMoto2">${cOpts}</select></div>
       <button class="btn btn-p" onclick="calcSim()">🔢 Calcular escenarios</button>
     </div>
-    <div id="simResults"></div>`;
-}
-
+    <div id="simResults"></div>`;}
 function simCard(m,precio,comm,fecha,label,color){
   if(!precio||precio<=0)return'';
   const neto=precio*(1-comm/100),ec=effCost(m),gain=neto-ec,roi=ec>0?gain/ec:0;
   const d=dys(m.buyDate,fecha||tod()),gpd=d>0?gain/d:0,mroi=ec>0?(gpd*30)/ec:0;
-  return`<div style="background:${color}11;border:1px solid ${color}44;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px">
-    <div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${label}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
-      <div><span style="color:var(--muted)">Precio</span><div style="font-weight:600">${fmt(precio)}</div></div>
-      <div><span style="color:var(--muted)">Neto</span><div style="font-weight:600">${fmt(neto)}</div></div>
-      <div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':''}${fmt(gain)}</div></div>
-      <div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</div></div>
-      <div><span style="color:var(--muted)">ROI/mes</span><div style="font-weight:600;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div></div>
-      <div><span style="color:var(--muted)">Días</span><div style="font-weight:600">${d}d</div></div>
-    </div>
-  </div>`;
-}
-
+  return`<div style="background:${color}11;border:1px solid ${color}44;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px"><div style="font-size:12px;font-weight:600;color:${color};margin-bottom:6px">${label}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px"><div><span style="color:var(--muted)">Precio</span><div style="font-weight:600">${fmt(precio)}</div></div><div><span style="color:var(--muted)">Neto</span><div style="font-weight:600">${fmt(neto)}</div></div><div><span style="color:var(--muted)">Ganancia</span><div style="font-weight:600;color:${gain>=0?'var(--green)':'var(--red)'}">${gain>=0?'+':''}${fmt(gain)}</div></div><div><span style="color:var(--muted)">ROI</span><div style="font-weight:600;color:${roi>=0?'var(--green)':'var(--red)'}">${pct(roi)}</div></div><div><span style="color:var(--muted)">ROI/mes</span><div style="font-weight:600;color:${mroi>=0?'var(--green)':'var(--red)'}">${pct(mroi)}/m</div></div><div><span style="color:var(--muted)">Días</span><div style="font-weight:600">${d}d</div></div></div></div>`;}
 function calcSim(){
   const mId=document.getElementById('simMoto').value,mId2=document.getElementById('simMoto2').value;
   const p1=parseFloat(document.getElementById('simP1').value),p2=parseFloat(document.getElementById('simP2').value),p3=parseFloat(document.getElementById('simP3').value);
-  const comm=parseFloat(document.getElementById('simComm').value)||10;
-  const fv=document.getElementById('simFechaVenta').value||tod();
+  const comm=parseFloat(document.getElementById('simComm').value)||10,fv=document.getElementById('simFechaVenta').value||tod();
   if(!p1&&!p2&&!p3){alert('Ingresá al menos un precio.');return;}
   const m=(P().motos||[]).find(x=>x.id===mId);if(!m)return;
   const ec=effCost(m),bec=Math.ceil(ec/((100-comm)/100));
-  let html=`<div class="slbl">${m.name.split(' ').slice(0,3).join(' ')}</div>
-    <div class="card" style="margin-bottom:4px">
-      <div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div>
-      <div class="cr"><span class="crl">Break-even (con ${comm}%)</span><span class="crv">${fmt(bec)}</span></div>
-    </div>`;
+  let html=`<div class="slbl">${m.name.split(' ').slice(0,3).join(' ')}</div><div class="card" style="margin-bottom:4px"><div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec)}</span></div><div class="cr"><span class="crl">Break-even (con ${comm}%)</span><span class="crv">${fmt(bec)}</span></div></div>`;
   if(p1)html+=simCard(m,p1,comm,fv,'Pesimista','#A32D2D');
   if(p2)html+=simCard(m,p2,comm,fv,'Esperado','#854F0B');
   if(p3)html+=simCard(m,p3,comm,fv,'Optimista','#3B6D11');
@@ -1143,96 +1069,8 @@ function calcSim(){
   const totalInvP=parts.reduce((a,inv)=>a+motoInvCost(m,inv),0);
   const invRows=parts.map(inv=>{const p=totalInvP>0?motoInvCost(m,inv)/totalInvP:0,ig=bg*p,nc=invTotCap(inv)+ig;return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span><span class="${bg>=0?'crg':'crn'}">${bg>=0?'+':''}${fmt(ig)}</span> <small style="color:var(--muted)">→ ${fmt(nc)}</small></span></div>`;}).join('');
   html+=`<div class="card" style="margin-top:8px"><div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nT)}</span></div><div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio (optimista):</div>${invRows}</div>`;
-  if(mId2){const m2=(P().motos||[]).find(x=>x.id===mId2);if(m2&&m2.id!==m.id){const ec2=effCost(m2),bec2=Math.ceil(ec2/((100-comm)/100));html+=`<div class="slbl mt">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div><div class="card" style="margin-bottom:4px"><div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div><div class="cr"><span class="crl">Break-even (con ${comm}%)</span><span class="crv">${fmt(bec2)}</span></div></div>`;if(p1)html+=simCard(m2,p1,comm,fv,'Pesimista','#A32D2D');if(p2)html+=simCard(m2,p2,comm,fv,'Esperado','#854F0B');if(p3)html+=simCard(m2,p3,comm,fv,'Optimista','#3B6D11');}}
-  document.getElementById('simResults').innerHTML=html;
-}
-
-// ── MODALES ───────────────────────────────────────────────
-function openOv(id){document.getElementById(id).classList.add('open');}
-function closeOv(id){document.getElementById(id).classList.remove('open');}
-
-function openAddMoto(){
-  document.getElementById('mFecha').value=tod();
-  document.getElementById('mNom').value='';
-  document.getElementById('mCosto').value='';
-  document.getElementById('mPartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="mp_${inv.id}" checked><label for="mp_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
-  document.getElementById('mExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="mEx_${inv.id}" placeholder="0" min="0"></div>`).join('');
-  openOv('ovAddMoto');
-}
-
-function doAddMoto(){
-  const name=document.getElementById('mNom').value.trim(),cost=parseFloat(document.getElementById('mCosto').value),buyDate=document.getElementById('mFecha').value;
-  if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
-  const participantes=members().filter(inv=>document.getElementById('mp_'+inv.id)?.checked).map(inv=>inv.id);
-  if(!participantes.length){alert('Seleccioná al menos un participante.');return;}
-  const extras={};members().forEach(inv=>{const el=document.getElementById('mEx_'+inv.id);extras[inv.id]=el?parseFloat(el.value)||0:0;});
-  if(!P().motos) P().motos=[];
-  P().motos.push({id:'m'+P().nextId++,name,cost,buyDate,sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,participantes,extras,extraCosts:[]});
-  schedSave();closeOv('ovAddMoto');renderAll();
-}
-
-function openEditMoto(id){
-  editMotoId=id;
-  const m=(P().motos||[]).find(x=>x.id===id);if(!m)return;
-  document.getElementById('eNom').value=m.name;
-  document.getElementById('eFecha').value=m.buyDate;
-  document.getElementById('eCosto').value=m.cost;
-  document.getElementById('ePartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="ep_${inv.id}"${mPartic(m).includes(inv.id)?' checked':''}><label for="ep_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
-  document.getElementById('eExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="eEx_${inv.id}" value="${m.extras[inv.id]||0}" min="0"></div>`).join('');
-  openOv('ovEditMoto');
-}
-
-function doEditMoto(){
-  const m=(P().motos||[]).find(x=>x.id===editMotoId);if(!m)return;
-  const name=document.getElementById('eNom').value.trim(),cost=parseFloat(document.getElementById('eCosto').value),buyDate=document.getElementById('eFecha').value;
-  if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
-  m.name=name;m.cost=cost;m.buyDate=buyDate;
-  m.participantes=members().filter(inv=>document.getElementById('ep_'+inv.id)?.checked).map(inv=>inv.id);
-  members().forEach(inv=>{const el=document.getElementById('eEx_'+inv.id);m.extras[inv.id]=el?parseFloat(el.value)||0:0;});
-  schedSave();closeOv('ovEditMoto');renderAll();
-}
-
-function openSell(id){
-  sellId=id;
-  document.getElementById('sFecha').value=tod();
-  document.getElementById('sPrecio').value='';
-  document.getElementById('sComm').value='10';
-  openOv('ovSell');
-}
-
-function doSell(){
-  const sp=parseFloat(document.getElementById('sPrecio').value),comm=parseFloat(document.getElementById('sComm').value)||10,saleDate=document.getElementById('sFecha').value;
-  if(!sp||sp<=0||!saleDate){alert('Completá todos los campos.');return;}
-  const m=(P().motos||[]).find(x=>x.id===sellId);
-  if(m){m.sold=true;m.salePrice=sp;m.comm=comm;m.netSale=sp*(1-comm/100);m.saleDate=saleDate;}
-  schedSave();closeOv('ovSell');renderAll();
-}
-
-function openAddCost(id){
-  costMotoId=id;
-  document.getElementById('cDesc').value='';
-  document.getElementById('cAmt').value='';
-  document.getElementById('cDate').value=tod();
-  document.getElementById('cPayer').innerHTML=`<option value="">-- Se reparte proporcionalmente --</option>`+members().map(inv=>`<option value="${inv.id}">${inv.name}</option>`).join('');
-  openOv('ovAddCost');
-}
-
-function doAddCost(){
-  const desc=document.getElementById('cDesc').value.trim(),amt=parseFloat(document.getElementById('cAmt').value),date=document.getElementById('cDate').value,payer=document.getElementById('cPayer').value;
-  if(!desc||isNaN(amt)||amt<=0){alert('Completá descripción y monto.');return;}
-  const m=(P().motos||[]).find(x=>x.id===costMotoId);
-  if(!m.extraCosts)m.extraCosts=[];
-  m.extraCosts.push({desc,amount:amt,date,payer});
-  schedSave();closeOv('ovAddCost');renderAll();
-}
-
-function delCost(motoId,idx){
-  if(!confirm('¿Eliminar este costo?'))return;
-  const m=(P().motos||[]).find(x=>x.id===motoId);
-  if(m&&m.extraCosts)m.extraCosts.splice(idx,1);
-  schedSave();renderAll();
-}
-
+  if(mId2){const m2=(P().motos||[]).find(x=>x.id===mId2);if(m2&&m2.id!==m.id){const ec2=effCost(m2),bec2=Math.ceil(ec2/((100-comm)/100));html+=`<div class="slbl mt">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div><div class="card" style="margin-bottom:4px"><div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div><div class="cr"><span class="crl">Break-even</span><span class="crv">${fmt(bec2)}</span></div></div>`;if(p1)html+=simCard(m2,p1,comm,fv,'Pesimista','#A32D2D');if(p2)html+=simCard(m2,p2,comm,fv,'Esperado','#854F0B');if(p3)html+=simCard(m2,p3,comm,fv,'Optimista','#3B6D11');}}
+  document.getElementById('simResults').innerHTML=html;}
 document.querySelectorAll('.ov').forEach(ov=>{ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});});
 </script>
 </body>
