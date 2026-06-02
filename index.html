@@ -1071,6 +1071,83 @@ function calcSim(){
   html+=`<div class="card" style="margin-top:8px"><div class="cr" style="border-top:none"><span class="crl">Nuevo capital total</span><span class="crv">${fmt(nT)}</span></div><div style="font-size:11px;color:var(--muted);margin:8px 0 4px">Por socio (optimista):</div>${invRows}</div>`;
   if(mId2){const m2=(P().motos||[]).find(x=>x.id===mId2);if(m2&&m2.id!==m.id){const ec2=effCost(m2),bec2=Math.ceil(ec2/((100-comm)/100));html+=`<div class="slbl mt">Comparación: ${m2.name.split(' ').slice(0,3).join(' ')}</div><div class="card" style="margin-bottom:4px"><div class="cr" style="border-top:none"><span class="crl">Costo total</span><span class="crv">${fmt(ec2)}</span></div><div class="cr"><span class="crl">Break-even</span><span class="crv">${fmt(bec2)}</span></div></div>`;if(p1)html+=simCard(m2,p1,comm,fv,'Pesimista','#A32D2D');if(p2)html+=simCard(m2,p2,comm,fv,'Esperado','#854F0B');if(p3)html+=simCard(m2,p3,comm,fv,'Optimista','#3B6D11');}}
   document.getElementById('simResults').innerHTML=html;}
+// ── MODAL HELPERS ─────────────────────────────────────────
+function openOv(id){const el=document.getElementById(id);if(el)el.classList.add('open');}
+function closeOv(id){const el=document.getElementById(id);if(el)el.classList.remove('open');}
+
+function openAddMoto(){
+  document.getElementById('mFecha').value=tod();
+  document.getElementById('mNom').value='';
+  document.getElementById('mCosto').value='';
+  document.getElementById('mPartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="mp_${inv.id}" checked><label for="mp_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
+  document.getElementById('mExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="mEx_${inv.id}" placeholder="0" min="0"></div>`).join('');
+  openOv('ovAddMoto');
+}
+function doAddMoto(){
+  const name=document.getElementById('mNom').value.trim(),cost=parseFloat(document.getElementById('mCosto').value),buyDate=document.getElementById('mFecha').value;
+  if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
+  const participantes=members().filter(inv=>document.getElementById('mp_'+inv.id)?.checked).map(inv=>inv.id);
+  if(!participantes.length){alert('Seleccioná al menos un participante.');return;}
+  const extras={};members().forEach(inv=>{const el=document.getElementById('mEx_'+inv.id);extras[inv.id]=el?parseFloat(el.value)||0:0;});
+  if(!P().motos)P().motos=[];
+  P().motos.push({id:'m'+P().nextId++,name,cost,buyDate,sold:false,saleDate:null,salePrice:null,comm:10,netSale:null,participantes,extras,extraCosts:[]});
+  schedSave();closeOv('ovAddMoto');renderAll();
+}
+function openEditMoto(id){
+  editMotoId=id;const m=(P().motos||[]).find(x=>x.id===id);if(!m)return;
+  document.getElementById('eNom').value=m.name;
+  document.getElementById('eFecha').value=m.buyDate;
+  document.getElementById('eCosto').value=m.cost;
+  document.getElementById('ePartic').innerHTML=members().map(inv=>`<div class="part-check"><input type="checkbox" id="ep_${inv.id}"${mPartic(m).includes(inv.id)?' checked':''}><label for="ep_${inv.id}" style="font-size:13px">${inv.name}</label></div>`).join('');
+  document.getElementById('eExtras').innerHTML=members().map(inv=>`<div class="cr-row"><span class="cn">${inv.name}</span><input type="number" id="eEx_${inv.id}" value="${m.extras[inv.id]||0}" min="0"></div>`).join('');
+  openOv('ovEditMoto');
+}
+function doEditMoto(){
+  const m=(P().motos||[]).find(x=>x.id===editMotoId);if(!m)return;
+  const name=document.getElementById('eNom').value.trim(),cost=parseFloat(document.getElementById('eCosto').value),buyDate=document.getElementById('eFecha').value;
+  if(!name||isNaN(cost)||cost<=0||!buyDate){alert('Completá todos los campos.');return;}
+  m.name=name;m.cost=cost;m.buyDate=buyDate;
+  m.participantes=members().filter(inv=>document.getElementById('ep_'+inv.id)?.checked).map(inv=>inv.id);
+  members().forEach(inv=>{const el=document.getElementById('eEx_'+inv.id);m.extras[inv.id]=el?parseFloat(el.value)||0:0;});
+  schedSave();closeOv('ovEditMoto');renderAll();
+}
+function openSell(id){
+  sellId=id;
+  document.getElementById('sFecha').value=tod();
+  document.getElementById('sPrecio').value='';
+  document.getElementById('sComm').value='10';
+  openOv('ovSell');
+}
+function doSell(){
+  const sp=parseFloat(document.getElementById('sPrecio').value),comm=parseFloat(document.getElementById('sComm').value)||10,saleDate=document.getElementById('sFecha').value;
+  if(!sp||sp<=0||!saleDate){alert('Completá todos los campos.');return;}
+  const m=(P().motos||[]).find(x=>x.id===sellId);
+  if(m){m.sold=true;m.salePrice=sp;m.comm=comm;m.netSale=sp*(1-comm/100);m.saleDate=saleDate;}
+  schedSave();closeOv('ovSell');renderAll();
+}
+function openAddCost(id){
+  costMotoId=id;
+  document.getElementById('cDesc').value='';
+  document.getElementById('cAmt').value='';
+  document.getElementById('cDate').value=tod();
+  document.getElementById('cPayer').innerHTML=`<option value="">-- Se reparte proporcionalmente --</option>`+members().map(inv=>`<option value="${inv.id}">${inv.name}</option>`).join('');
+  openOv('ovAddCost');
+}
+function doAddCost(){
+  const desc=document.getElementById('cDesc').value.trim(),amt=parseFloat(document.getElementById('cAmt').value),date=document.getElementById('cDate').value,payer=document.getElementById('cPayer').value;
+  if(!desc||isNaN(amt)||amt<=0){alert('Completá descripción y monto.');return;}
+  const m=(P().motos||[]).find(x=>x.id===costMotoId);
+  if(!m.extraCosts)m.extraCosts=[];
+  m.extraCosts.push({desc,amount:amt,date,payer});
+  schedSave();closeOv('ovAddCost');renderAll();
+}
+function delCost(motoId,idx){
+  if(!confirm('¿Eliminar este costo?'))return;
+  const m=(P().motos||[]).find(x=>x.id===motoId);
+  if(m&&m.extraCosts)m.extraCosts.splice(idx,1);
+  schedSave();renderAll();
+}
+
 document.querySelectorAll('.ov').forEach(ov=>{ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});});
 </script>
 </body>
