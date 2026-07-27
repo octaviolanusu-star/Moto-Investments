@@ -595,7 +595,8 @@ const motoBaseSh=(m,inv)=>{
 const motoInvCost=(m,inv)=>{
   if(!mPartic(m).includes(inv.id))return 0;
   const extraBuy=m.extras[inv.id]||0;
-  const repairs=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+  const repairsPagadosPorEl=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+  const repairsProporcionales=(m.extraCosts||[]).filter(c=>!c.payer).reduce((a,c)=>a+c.amount,0);
 
   // Ver cuanto habia en caja antes de esta compra
   const saldoPrevio=calcCajaHasta(m.buyDate);
@@ -605,18 +606,29 @@ const motoInvCost=(m,inv)=>{
   const fromCaja=Math.min(saldoTotal,costNeeded);
   const frescoTotal=costNeeded-fromCaja;
 
+  // Share (ratio) de este socio en la compra de la moto, usado tambien para repartir reparaciones proporcionales
+  let shareRatio;
   if(saldoTotal<0.01){
-    // No habia caja — todo fue capital inicial proporcional
+    shareRatio=motoBaseSh(m,inv);
+  } else {
+    const cajaShare=(saldoPrevio[inv.id]||0)/saldoTotal;
+    // Ratio combinado ponderado por cuanto vino de caja vs capital fresco
+    const deCajaW=fromCaja*cajaShare;
+    const deFrescoW=frescoTotal>0?frescoTotal*motoBaseSh(m,inv):0;
+    shareRatio=costNeeded>0?(deCajaW+deFrescoW)/costNeeded:motoBaseSh(m,inv);
+  }
+  const repairsShare=repairsProporcionales*shareRatio;
+
+  if(saldoTotal<0.01){
     const basePool=m.cost-extrasTotal;
     const propPart=Math.max(0,basePool*motoBaseSh(m,inv));
-    return propPart+extraBuy+repairs;
+    return propPart+extraBuy+repairsPagadosPorEl+repairsShare;
   }
 
-  // Habia caja — parte de caja + parte de capital fresco (si faltaba)
   const cajaShare=saldoTotal>0?(saldoPrevio[inv.id]||0)/saldoTotal:0;
   const deCaja=fromCaja*cajaShare;
   const deFresco=frescoTotal>0?frescoTotal*motoBaseSh(m,inv):0;
-  return deCaja+deFresco+extraBuy+repairs;
+  return deCaja+deFresco+extraBuy+repairsPagadosPorEl+repairsShare;
 };
 const motoGain=m=>m.sold?m.netSale-effCost(m):null;
 const invGainMoto=(m,inv)=>{
