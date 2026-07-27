@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -236,7 +237,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="nav-btn" data-tab="caja" onclick="sw('caja')">Caja</button>
     <button class="nav-btn" data-tab="socios" onclick="sw('socios')">Socios</button>
     <button class="nav-btn" data-tab="rendimiento" onclick="sw('rendimiento')">Rendimiento</button>
-    <button class="nav-btn" data-tab="transferencias" onclick="sw('transferencias')">Transferencias</button>
+    <button class="nav-btn" data-tab="movimientos" onclick="sw('movimientos')">Movimientos</button>
     <button class="nav-btn" data-tab="historial" onclick="sw('historial')">Historial</button>
     <button class="nav-btn" data-tab="proyeccion" onclick="sw('proyeccion')">Proyección</button>
     <button class="nav-btn" data-tab="simulador" onclick="sw('simulador')">Simulador</button>
@@ -548,6 +549,9 @@ function calcCaja(){
     (m.extraCosts||[]).forEach(c=>events.push({type:'costo',date:c.date,moto:m,costo:c}));
     if(m.sold) events.push({type:'venta',date:m.saleDate,moto:m});
   });
+  (P().movimientos||[]).filter(mv=>mv.tipo==='retiro_caja').forEach(mv=>{
+    events.push({type:'retiro_caja',date:mv.fecha,mov:mv});
+  });
   events.sort((a,b)=>a.date>b.date?1:-1);
 
   let saldoPorSocio={};
@@ -592,6 +596,12 @@ function calcCaja(){
         saldoPorSocio[id]+=m.netSale*share;
       });
       movimientos.push({type:'venta',date:ev.date,label:`Venta ${m.name}`,amt:m.netSale,detail:'Repartido según participación en esta moto'});
+    } else if(ev.type==='retiro_caja'){
+      const mv=ev.mov;
+      const inv=P().members.find(i=>i.id===mv.invId);
+      if(saldoPorSocio[mv.invId]===undefined)saldoPorSocio[mv.invId]=0;
+      saldoPorSocio[mv.invId]-=mv.amt;
+      movimientos.push({type:'retiro_caja',date:ev.date,label:`Retiro de caja: ${inv?.name||mv.invId}`,amt:-mv.amt,detail:mv.nota||'Retiro individual'});
     }
   });
 
@@ -633,7 +643,7 @@ function renderTab(){
   else if(activeTab==='caja') el.innerHTML=rCaja();
   else if(activeTab==='socios') el.innerHTML=rSocios();
   else if(activeTab==='rendimiento') el.innerHTML=rRendimiento();
-  else if(activeTab==='transferencias') el.innerHTML=rTransferencias();
+  else if(activeTab==='movimientos') el.innerHTML=rTransferencias();
   else if(activeTab==='historial') el.innerHTML=rHistorial();
   else if(activeTab==='proyeccion'){el.innerHTML=rProyeccion();bindProj();}
   else if(activeTab==='simulador') el.innerHTML=rSimulador();
@@ -700,7 +710,7 @@ function rCaja(){
     </div>`;
   }).join('');
 
-  const icons={compra:'⬆️',venta:'⬇️',costo:'🔧'};
+  const icons={compra:'⬆️',venta:'⬇️',costo:'🔧',retiro_caja:'🏦'};
   const colors={compra:'var(--red)',venta:'var(--green)',costo:'var(--red)'};
   const movHTML=movimientos.length?movimientos.map(mv=>`
     <div style="display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--border)">
@@ -720,28 +730,9 @@ function rCaja(){
     </div>
     <div class="slbl">Parte de cada socio en la caja</div>
     <div class="card" style="padding:12px 14px;margin-bottom:16px">${porSocioHTML}</div>
-    ${saldoTotal>0.01?`<button class="btn btn-o" style="margin-bottom:16px" onclick="openDistribuirCaja()">↗️ Distribuir saldo entre socios</button>`:''}
+    ${saldoTotal>0.01?`<p style="font-size:12px;color:var(--muted);margin-bottom:16px">¿Querés retirar tu parte? Hacelo desde <strong>Movimientos → Retiro de caja</strong>.</p>`:''}
     <div class="slbl">Movimientos de caja</div>
     <div class="card">${movHTML}</div>`;
-}
-
-function openDistribuirCaja(){
-  const{saldoTotal,saldoPorSocio}=calcCaja();
-  if(saldoTotal<=0.01){alert('No hay saldo en caja para distribuir.');return;}
-  if(!confirm(`Esto va a registrar un retiro proporcional de ${fmt(saldoTotal)} entre los socios, según su parte en la caja. ¿Continuar?`))return;
-  const fecha=tod();
-  if(!P().movimientos)P().movimientos=[];
-  members().forEach(inv=>{
-    const monto=saldoPorSocio[inv.id]||0;
-    if(monto>0.01){
-      // Esto se registra como un aporte negativo (retiro) que reduce su capital,
-      // ya que ese dinero sale del pool hacia el socio.
-      P().movimientos.push({id:'mv'+Date.now()+inv.id,invId:inv.id,tipo:'retiro',amt:monto,fecha,nota:'Distribución del saldo en caja'});
-      inv.cap=Math.max(0,inv.cap-monto);
-    }
-  });
-  schedSave();renderAll();
-  alert('✓ Saldo distribuido entre los socios.');
 }
 
 function rMotos(){
@@ -898,23 +889,25 @@ function rTransferencias(){
   let histHTML=movs.length?[...movs].sort((a,b)=>b.fecha>a.fecha?1:-1).map(mv=>{
     const inv=P().members.find(i=>i.id===mv.invId);
     const to=mv.toInvId?P().members.find(i=>i.id===mv.toInvId):null;
-    const icons={retiro:'💸',aporte:'💵'};
+    const icons={retiro:'💸',aporte:'💵',retiro_caja:'🏦'};
+    const labels={retiro:'Retiro de participación',aporte:'Aporte',retiro_caja:'Retiro de caja'};
     return`<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
       <div>
-        <div class="mov-badge" style="background:${mv.tipo==='retiro'?'#FCEBEB':'#EEEDFE'};color:${mv.tipo==='retiro'?'var(--red)':'var(--purple)'}">${icons[mv.tipo]||'📋'} ${mv.tipo==='retiro'?'Retiro':'Aporte'}</div>
+        <div class="mov-badge" style="background:${mv.tipo==='aporte'?'#EEEDFE':'#FCEBEB'};color:${mv.tipo==='aporte'?'var(--purple)':'var(--red)'}">${icons[mv.tipo]||'📋'} ${labels[mv.tipo]||mv.tipo}</div>
         <div style="font-size:13px;font-weight:500;margin-top:3px">${inv?.name||mv.invId}${to?' → '+to.name:''}</div>
         ${mv.nota?`<div style="font-size:12px;color:var(--muted)">${mv.nota}</div>`:''}
         <div style="font-size:11px;color:var(--muted)">${fD(mv.fecha)}</div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:15px;font-weight:700;color:${mv.tipo==='retiro'?'var(--red)':'var(--green)'}">${mv.tipo==='retiro'?'-':'+'}${fmt(mv.amt)}</div>
+        <div style="font-size:15px;font-weight:700;color:${mv.tipo==='aporte'?'var(--green)':'var(--red)'}">${mv.tipo==='aporte'?'+':'-'}${fmt(mv.amt)}</div>
         <button class="btn-sm btn-ds" style="margin-top:4px" onclick="delTransfer('${mv.id}')">✕</button>
       </div>
     </div>`;
-  }).join(''):`<p style="font-size:13px;color:var(--muted)">No hay transferencias registradas.</p>`;
+  }).join(''):`<p style="font-size:13px;color:var(--muted)">No hay movimientos registrados.</p>`;
   return`
-    <div class="slbl">Nueva transferencia</div>
+    <div class="slbl">Nuevo movimiento</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <button class="btn btn-r" onclick="openTransfer('retiro_caja')">🏦 Retiro de caja</button>
       <button class="btn btn-r" onclick="openTransfer('retiro')">💸 Retiro / Traspaso de participación</button>
       <button class="btn btn-p" onclick="openTransfer('aporte')">💵 Aporte de capital adicional</button>
     </div>
@@ -932,6 +925,18 @@ function openTransfer(tipo){
       <div class="fg"><label>Fecha</label><input type="date" id="tFecha" value="${tod()}"></div>
       <div class="fg"><label>Nota (opcional)</label><input type="text" id="tNota"></div>
       <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doAporte()">Registrar</button></div>`;
+  } else if(tipo==='retiro_caja'){
+    document.getElementById('transferTitle').textContent='🏦 Retiro de caja';
+    const{saldoPorSocio}=calcCaja();
+    el.innerHTML=`
+      <div class="fg"><label>Socio que retira</label><select id="tcInv" onchange="updateRetiroCajaInfo()">${members().map(i=>`<option value="${i.id}">${i.name}</option>`).join('')}</select></div>
+      <div id="tcDisponible" style="font-size:13px;color:var(--muted);margin-bottom:14px"></div>
+      <div class="fg"><label>Monto a retirar (USD)</label><input type="number" id="tcAmt" placeholder="0" min="0"></div>
+      <div class="fg"><label>Fecha</label><input type="date" id="tcFecha" value="${tod()}"></div>
+      <div class="fg"><label>Nota (opcional)</label><input type="text" id="tcNota" placeholder="Ej: Retiro para gastos personales"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Este retiro sale de la plata líquida disponible en caja. No afecta tu participación en las motos activas.</div>
+      <div class="sa"><button class="btn btn-o" onclick="closeOv('ovTransfer')">Cancelar</button><button class="btn btn-p" onclick="doRetiroCaja()">Confirmar retiro</button></div>`;
+    updateRetiroCajaInfo();
   } else {
     document.getElementById('transferTitle').textContent='💸 Retiro / Traspaso';
     const mAct=(P().motos||[]).filter(m=>!m.sold);
@@ -966,6 +971,30 @@ function openTransfer(tipo){
     updateRetiroAmt();
   }
   openOv('ovTransfer');
+}
+
+function updateRetiroCajaInfo(){
+  const invId=document.getElementById('tcInv')?.value;
+  const{saldoPorSocio}=calcCaja();
+  const disponible=saldoPorSocio[invId]||0;
+  const el=document.getElementById('tcDisponible');
+  if(el) el.innerHTML=`Disponible en caja para este socio: <strong style="color:var(--green)">${fmt(disponible)}</strong>`;
+}
+
+function doRetiroCaja(){
+  const invId=document.getElementById('tcInv').value;
+  const amt=parseFloat(document.getElementById('tcAmt').value);
+  const fecha=document.getElementById('tcFecha').value;
+  const nota=document.getElementById('tcNota').value.trim();
+  if(!invId||isNaN(amt)||amt<=0||!fecha){alert('Completá todos los campos.');return;}
+  const{saldoPorSocio}=calcCaja();
+  const disponible=saldoPorSocio[invId]||0;
+  if(amt>disponible+0.01){alert(`No podés retirar más de lo que tenés disponible en caja (${fmt(disponible)}).`);return;}
+  const inv=P().members.find(i=>i.id===invId);
+  if(inv) inv.cap=Math.max(0,inv.cap-amt);
+  if(!P().movimientos)P().movimientos=[];
+  P().movimientos.push({id:'mv'+Date.now(),invId,tipo:'retiro_caja',amt,fecha,nota:nota||'Retiro de caja'});
+  schedSave();closeOv('ovTransfer');renderAll();
 }
 
 function updateRetiroAmt(){
