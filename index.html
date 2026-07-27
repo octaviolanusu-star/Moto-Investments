@@ -1162,33 +1162,33 @@ function doRetiroCaja(){
   const msg=`Retiro extendido:\n• De la caja: ${fmt(disponibleCaja)}\n• De tu participación en motos: ${fmt(exceso)}\n\nEsto reducirá tu % en las motos activas. La cesión es al valor de costo.\n\n¿Confirmás?`;
   if(!confirm(msg))return;
 
-  // Descontar exceso de cada moto proporcionalmente
+  // Descontar exceso de cada moto proporcionalmente, guardando el detalle para poder revertir
+  const cambiosPorMoto=[];
   capPorMoto.forEach(({m,cap})=>{
     const descuento=exceso*(cap/totalCapMotos);
-    // Reducir aporte del socio que retira
-    if(m.extras[invId]!==undefined){
-      const maxExtra=m.extras[invId];
-      const descExtra=Math.min(descuento,maxExtra);
-      m.extras[invId]-=descExtra;
-      // El resto del descuento sale del capital proporcional (ajustamos cap base)
-    }
-    // Redistribuir entre los otros participantes proporcionalmente
+    const cambios={motoId:m.id,invId,montoInvId:descuento,otros:[]};
+    if(m.extras[invId]===undefined)m.extras[invId]=0;
+    m.extras[invId]-=descuento;
     const otrosParts=mPartic(m).filter(id=>id!==invId);
     const totalCapOtros=otrosParts.reduce((a,id)=>{const i=P().members.find(x=>x.id===id);return a+(i?i.cap:0);},0);
     otrosParts.forEach(id=>{
       const oInv=P().members.find(x=>x.id===id);if(!oInv)return;
       const share=totalCapOtros>0?oInv.cap/totalCapOtros:1/otrosParts.length;
+      const monto=descuento*share;
       if(m.extras[id]===undefined)m.extras[id]=0;
-      m.extras[id]+=descuento*share;
+      m.extras[id]+=monto;
+      cambios.otros.push({id,monto});
     });
+    cambiosPorMoto.push(cambios);
   });
 
+  const capOriginal=inv.cap;
   inv.cap=Math.max(0,inv.cap-amt);
   if(!P().movimientos)P().movimientos=[];
   P().movimientos.push({
     id:'mv'+Date.now(),invId,tipo:'retiro_caja',amt,fecha,
     nota:(nota||'Retiro de caja')+` (incluye cesión de participación al costo por ${fmt(exceso)})`,
-    exceso,esExtendido:true
+    exceso,esExtendido:true,cambiosPorMoto
   });
   schedSave();closeOv('ovTransfer');renderAll();
   alert(`✓ Retiro registrado.\nDe la caja: ${fmt(disponibleCaja)}\nCedido de motos: ${fmt(exceso)}`);
@@ -1263,7 +1263,35 @@ function doRetiro(){
 }
 
 function delTransfer(id){
-  if(!confirm('¿Eliminar esta transferencia?'))return;
+  const mv=(P().movimientos||[]).find(m=>m.id===id);
+  if(!mv){return;}
+
+  if(mv.tipo==='retiro_caja'&&mv.esExtendido&&mv.cambiosPorMoto){
+    if(!confirm('Este fue un retiro extendido (con cesión de participación en motos).\n\nAl eliminarlo se revertirá automáticamente:\n• Tu capital (se devuelve el monto retirado)\n• La participación cedida en cada moto\n\n¿Confirmás?'))return;
+    // Revertir cambios en cada moto
+    mv.cambiosPorMoto.forEach(c=>{
+      const m=(P().motos||[]).find(x=>x.id===c.motoId);
+      if(!m)return;
+      if(m.extras[c.invId]!==undefined) m.extras[c.invId]+=c.montoInvId;
+      c.otros.forEach(o=>{
+        if(m.extras[o.id]!==undefined) m.extras[o.id]-=o.monto;
+      });
+    });
+    // Revertir capital del socio
+    const inv=P().members.find(i=>i.id===mv.invId);
+    if(inv) inv.cap+=mv.amt;
+  } else if(mv.tipo==='retiro_caja'){
+    if(!confirm('¿Eliminar esta transferencia? Se devolverá el monto al capital del socio.'))return;
+    const inv=P().members.find(i=>i.id===mv.invId);
+    if(inv) inv.cap+=mv.amt;
+  } else if(mv.tipo==='aporte'){
+    if(!confirm('¿Eliminar esta transferencia? Se descontará el monto del capital del socio.'))return;
+    const inv=P().members.find(i=>i.id===mv.invId);
+    if(inv) inv.cap=Math.max(0,inv.cap-mv.amt);
+  } else {
+    if(!confirm('¿Eliminar esta transferencia?'))return;
+  }
+
   P().movimientos=(P().movimientos||[]).filter(m=>m.id!==id);
   schedSave();renderAll();
 }
