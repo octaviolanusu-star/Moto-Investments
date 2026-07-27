@@ -506,6 +506,27 @@ const mPartic=m=>(m.participantes||(P().members||[]).map(i=>i.id));
 const repairTotal=m=>(m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
 const effCost=m=>m.cost+repairTotal(m);
 const buyExtrasTotal=m=>Object.values(m.extras||{}).reduce((a,b)=>a+b,0);
+// Aplica un retiro de caja al objeto saldo (mutando in-place), distribuyendo
+// correctamente: primero descuenta del socio que retira, y si excede su parte,
+// el exceso se descuenta proporcionalmente del resto (porque esa plata sale
+// fisicamente del pool y ya fue compensada con mas participacion en motos)
+function aplicarRetiroCaja(saldo,invId,amt){
+  const propia=saldo[invId]||0;
+  const desdeSuParte=Math.min(propia,amt);
+  saldo[invId]=propia-desdeSuParte;
+  const exceso=amt-desdeSuParte;
+  if(exceso>0.01){
+    const otrosIds=Object.keys(saldo).filter(id=>id!==invId);
+    const totalOtros=otrosIds.reduce((a,id)=>a+Math.max(0,saldo[id]),0);
+    if(totalOtros>0.01){
+      otrosIds.forEach(id=>{
+        const share=Math.max(0,saldo[id])/totalOtros;
+        saldo[id]-=exceso*share;
+      });
+    }
+  }
+}
+
 // Calcula el saldo de caja por socio HASTA una fecha determinada
 // Solo acumula ventas y descuenta compras/costos — sin recursion
 function calcCajaHasta(fechaLimite){
@@ -557,7 +578,7 @@ function calcCajaHasta(fechaLimite){
         saldo[id]+=m.netSale*share;
       });
     } else if(ev.type==='retiro_caja'){
-      if(saldo[ev.mov.invId]!==undefined) saldo[ev.mov.invId]-=ev.mov.amt;
+      aplicarRetiroCaja(saldo,ev.mov.invId,ev.mov.amt);
     }
   });
   return saldo;
@@ -711,7 +732,7 @@ function calcCaja(){
       const mv=ev.mov;
       const inv=P().members.find(i=>i.id===mv.invId);
       if(saldoPorSocio[mv.invId]===undefined)saldoPorSocio[mv.invId]=0;
-      saldoPorSocio[mv.invId]-=mv.amt;
+      aplicarRetiroCaja(saldoPorSocio,mv.invId,mv.amt);
       movimientos.push({type:'retiro_caja',date:ev.date,label:`Retiro de caja: ${inv?.name||mv.invId}`,amt:-mv.amt,detail:mv.nota||'Retiro individual'});
     }
   });
