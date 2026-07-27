@@ -506,18 +506,94 @@ const mPartic=m=>(m.participantes||(P().members||[]).map(i=>i.id));
 const repairTotal=m=>(m.extraCosts||[]).reduce((a,c)=>a+c.amount,0);
 const effCost=m=>m.cost+repairTotal(m);
 const buyExtrasTotal=m=>Object.values(m.extras||{}).reduce((a,b)=>a+b,0);
+// Calcula el saldo de caja por socio HASTA una fecha determinada (exclusive)
+// Usado para determinar la participacion en motos compradas con plata de la caja
+function calcCajaHasta(fechaLimite){
+  const events=[];
+  (P().motos||[]).forEach(m=>{
+    if(m.buyDate<fechaLimite) events.push({type:'compra',date:m.buyDate,moto:m});
+    (m.extraCosts||[]).forEach(c=>{if(c.date<fechaLimite&&!c.payer)events.push({type:'costo',date:c.date,moto:m,costo:c});});
+    if(m.sold&&m.saleDate<fechaLimite) events.push({type:'venta',date:m.saleDate,moto:m});
+  });
+  (P().movimientos||[]).filter(mv=>mv.tipo==='retiro_caja'&&mv.fecha<fechaLimite).forEach(mv=>{
+    events.push({type:'retiro_caja',date:mv.fecha,mov:mv});
+  });
+  events.sort((a,b)=>a.date>b.date?1:-1);
+  let saldo={};
+  members().forEach(inv=>saldo[inv.id]=0);
+  events.forEach(ev=>{
+    const m=ev.moto;
+    if(ev.type==='compra'){
+      const extrasTotal=buyExtrasTotal(m);
+      const costNeeded=m.cost-extrasTotal;
+      const saldoTotal=Object.values(saldo).reduce((a,b)=>a+b,0);
+      const fromCaja=Math.min(saldoTotal,costNeeded);
+      if(fromCaja>0&&saldoTotal>0){
+        Object.keys(saldo).forEach(id=>{saldo[id]-=fromCaja*(saldo[id]/saldoTotal);});
+      }
+    } else if(ev.type==='costo'){
+      const saldoTotal=Object.values(saldo).reduce((a,b)=>a+b,0);
+      if(saldoTotal>0.01) Object.keys(saldo).forEach(id=>{saldo[id]-=ev.costo.amount*(saldo[id]/saldoTotal);});
+    } else if(ev.type==='venta'){
+      const parts=mPartic(m);
+      const totalInvP=parts.reduce((a,id)=>{
+        const inv=P().members.find(x=>x.id===id);
+        return a+(inv?motoInvCostBase(m,inv,saldo):0);
+      },0);
+      parts.forEach(id=>{
+        const inv=P().members.find(x=>x.id===id);if(!inv)return;
+        const share=totalInvP>0?motoInvCostBase(m,inv,saldo)/totalInvP:0;
+        if(saldo[id]===undefined)saldo[id]=0;
+        saldo[id]+=m.netSale*share;
+      });
+    } else if(ev.type==='retiro_caja'){
+      if(saldo[ev.mov.invId]!==undefined) saldo[ev.mov.invId]-=ev.mov.amt;
+    }
+  });
+  return saldo;
+}
+
+// Participacion base usando capital inicial (para motos sin historial de caja)
 const motoBaseSh=(m,inv)=>{
   const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
   const tot=parts.reduce((a,i)=>a+i.cap,0);
   return tot>0?(inv.cap/tot):(1/Math.max(1,parts.length));
 };
+
+// Costo de inversion de un socio en una moto usando saldo de caja previo
+const motoInvCostBase=(m,inv,saldoPrevio)=>{
+  if(!mPartic(m).includes(inv.id))return 0;
+  const extrasTotal=buyExtrasTotal(m);
+  const costNeeded=m.cost-extrasTotal;
+  const saldoTotal=Object.values(saldoPrevio).reduce((a,b)=>a+b,0);
+  const fromCaja=Math.min(saldoTotal,costNeeded);
+  // Parte del socio de lo que sale de caja
+  const cajaShare=saldoTotal>0?(saldoPrevio[inv.id]||0)/saldoTotal:motoBaseSh(m,inv);
+  const deCaja=fromCaja*cajaShare;
+  // Parte del capital fresco (lo que no cubre la caja)
+  const frescoTotal=costNeeded-fromCaja;
+  const deFresco=frescoTotal>0?frescoTotal*motoBaseSh(m,inv):0;
+  // Aporte extra de este socio
+  const extraBuy=m.extras[inv.id]||0;
+  // Reparaciones pagadas por este socio
+  const repairs=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+  return deCaja+deFresco+extraBuy+repairs;
+};
+
+// Costo de inversion de un socio en una moto (calcula el saldo previo automaticamente)
 const motoInvCost=(m,inv)=>{
   if(!mPartic(m).includes(inv.id))return 0;
-  const basePool=m.cost-buyExtrasTotal(m);
-  const propPart=Math.max(0,basePool*motoBaseSh(m,inv));
-  const extraBuy=m.extras[inv.id]||0;
-  const repairs=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
-  return propPart+extraBuy+repairs;
+  const saldoPrevio=calcCajaHasta(m.buyDate);
+  const saldoTotal=Object.values(saldoPrevio).reduce((a,b)=>a+b,0);
+  // Si no habia saldo en caja, usar capital inicial proporcional
+  if(saldoTotal<0.01){
+    const basePool=m.cost-buyExtrasTotal(m);
+    const propPart=Math.max(0,basePool*motoBaseSh(m,inv));
+    const extraBuy=m.extras[inv.id]||0;
+    const repairs=(m.extraCosts||[]).filter(c=>c.payer===inv.id).reduce((a,c)=>a+c.amount,0);
+    return propPart+extraBuy+repairs;
+  }
+  return motoInvCostBase(m,inv,saldoPrevio);
 };
 const motoGain=m=>m.sold?m.netSale-effCost(m):null;
 const invGainMoto=(m,inv)=>{
@@ -745,7 +821,11 @@ function rMotos(){
       const d=dys(m.buyDate,m.saleDate),gpd=g/d,mroi=(gpd*30)/ec;
       const parts=mPartic(m).map(id=>P().members.find(i=>i.id===id)).filter(Boolean);
       const repItems=(m.extraCosts||[]).map(c=>{const pName=c.payer?P().members.find(i=>i.id===c.payer)?.name||c.payer:'Proporcional';return`<div class="ei"><span style="color:var(--muted)">${c.desc} <small>${fD(c.date)}</small> · <small>${pName}</small></span><span class="crn">-${fmt(c.amount)}</span></div>`;}).join('');
-      const invP=parts.map(inv=>`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name}</span><span class="crg">+${fmt(invGainMoto(m,inv))}</span></div>`).join('');
+      const totalInvPartsS=parts.reduce((a,inv)=>a+motoInvCost(m,inv),0);
+      const invP=parts.map(inv=>{
+        const ic=motoInvCost(m,inv),ip=totalInvPartsS>0?ic/totalInvPartsS:0;
+        return`<div class="cr"><span class="crl" style="display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${inv.color};display:inline-block"></span>${inv.name} <small style="color:var(--muted)">(${pct(ip)})</small></span><span class="crg">+${fmt(invGainMoto(m,inv))}</span></div>`;
+      }).join('');
       html+=`<div class="card">
         <div class="moto-head"><div><div class="moto-name">${m.name}</div><div class="moto-date">${fD(m.buyDate)} → ${fD(m.saleDate)}</div></div><span class="badge b-sold">Vendida</span></div>
         <div class="cr" style="border-top:none"><span class="crl">Costo compra</span><span class="crv">${fmt(m.cost)}</span></div>
@@ -975,10 +1055,18 @@ function openTransfer(tipo){
 
 function updateRetiroCajaInfo(){
   const invId=document.getElementById('tcInv')?.value;
-  const{saldoPorSocio}=calcCaja();
+  const{saldoPorSocio,saldoTotal}=calcCaja();
   const disponible=saldoPorSocio[invId]||0;
   const el=document.getElementById('tcDisponible');
-  if(el) el.innerHTML=`Disponible en caja para este socio: <strong style="color:var(--green)">${fmt(disponible)}</strong>`;
+  if(el) el.innerHTML=`
+    <div style="background:var(--green-bg);border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--green-text)">Tu parte en la caja</span><strong style="color:var(--green-text)">${fmt(disponible)}</strong></div>
+      <div style="font-size:11px;color:var(--green-text);margin-top:2px">Retiro normal — no afecta tu participación en motos</div>
+    </div>
+    <div style="background:var(--amber-bg);border-radius:var(--rs);padding:10px 12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--amber)">Total en caja</span><strong style="color:var(--amber)">${fmt(saldoTotal)}</strong></div>
+      <div style="font-size:11px;color:var(--amber);margin-top:2px">Si retirás más de ${fmt(disponible)}, el exceso sale de tu participación en las motos activas (al costo)</div>
+    </div>`;
 }
 
 function doRetiroCaja(){
@@ -987,14 +1075,67 @@ function doRetiroCaja(){
   const fecha=document.getElementById('tcFecha').value;
   const nota=document.getElementById('tcNota').value.trim();
   if(!invId||isNaN(amt)||amt<=0||!fecha){alert('Completá todos los campos.');return;}
-  const{saldoPorSocio}=calcCaja();
-  const disponible=saldoPorSocio[invId]||0;
-  if(amt>disponible+0.01){alert(`No podés retirar más de lo que tenés disponible en caja (${fmt(disponible)}).`);return;}
+  const{saldoPorSocio,saldoTotal}=calcCaja();
+  const disponibleCaja=saldoPorSocio[invId]||0;
+  const cajaTotal=saldoTotal;
   const inv=P().members.find(i=>i.id===invId);
-  if(inv) inv.cap=Math.max(0,inv.cap-amt);
+  if(!inv)return;
+
+  // Caso 1: retiro dentro de su parte en la caja
+  if(amt<=disponibleCaja+0.01){
+    inv.cap=Math.max(0,inv.cap-amt);
+    if(!P().movimientos)P().movimientos=[];
+    P().movimientos.push({id:'mv'+Date.now(),invId,tipo:'retiro_caja',amt,fecha,nota:nota||'Retiro de caja'});
+    schedSave();closeOv('ovTransfer');renderAll();
+    return;
+  }
+
+  // Caso 2: retiro extendido — exceso sale de participacion en motos activas
+  if(amt>cajaTotal+0.01){alert(`No podés retirar más del total en caja (${fmt(cajaTotal)}).`);return;}
+
+  const exceso=amt-disponibleCaja;
+  const motosActivas=(P().motos||[]).filter(m=>!m.sold&&mPartic(m).includes(invId));
+  if(!motosActivas.length){alert('No hay motos activas de las que descontar el exceso.');return;}
+
+  // Capital del socio en cada moto activa
+  const capPorMoto=motosActivas.map(m=>({m,cap:motoInvCost(m,inv)}));
+  const totalCapMotos=capPorMoto.reduce((a,x)=>a+x.cap,0);
+
+  if(totalCapMotos<exceso){alert(`El exceso ($${exceso.toFixed(0)}) supera tu participación total en motos activas ($${totalCapMotos.toFixed(0)}).`);return;}
+
+  const msg=`Retiro extendido:\n• De la caja: ${fmt(disponibleCaja)}\n• De tu participación en motos: ${fmt(exceso)}\n\nEsto reducirá tu % en las motos activas. La cesión es al valor de costo.\n\n¿Confirmás?`;
+  if(!confirm(msg))return;
+
+  // Descontar exceso de cada moto proporcionalmente
+  capPorMoto.forEach(({m,cap})=>{
+    const descuento=exceso*(cap/totalCapMotos);
+    // Reducir aporte del socio que retira
+    if(m.extras[invId]!==undefined){
+      const maxExtra=m.extras[invId];
+      const descExtra=Math.min(descuento,maxExtra);
+      m.extras[invId]-=descExtra;
+      // El resto del descuento sale del capital proporcional (ajustamos cap base)
+    }
+    // Redistribuir entre los otros participantes proporcionalmente
+    const otrosParts=mPartic(m).filter(id=>id!==invId);
+    const totalCapOtros=otrosParts.reduce((a,id)=>{const i=P().members.find(x=>x.id===id);return a+(i?i.cap:0);},0);
+    otrosParts.forEach(id=>{
+      const oInv=P().members.find(x=>x.id===id);if(!oInv)return;
+      const share=totalCapOtros>0?oInv.cap/totalCapOtros:1/otrosParts.length;
+      if(m.extras[id]===undefined)m.extras[id]=0;
+      m.extras[id]+=descuento*share;
+    });
+  });
+
+  inv.cap=Math.max(0,inv.cap-amt);
   if(!P().movimientos)P().movimientos=[];
-  P().movimientos.push({id:'mv'+Date.now(),invId,tipo:'retiro_caja',amt,fecha,nota:nota||'Retiro de caja'});
+  P().movimientos.push({
+    id:'mv'+Date.now(),invId,tipo:'retiro_caja',amt,fecha,
+    nota:(nota||'Retiro de caja')+` (incluye cesión de participación al costo por ${fmt(exceso)})`,
+    exceso,esExtendido:true
+  });
   schedSave();closeOv('ovTransfer');renderAll();
+  alert(`✓ Retiro registrado.\nDe la caja: ${fmt(disponibleCaja)}\nCedido de motos: ${fmt(exceso)}`);
 }
 
 function updateRetiroAmt(){
